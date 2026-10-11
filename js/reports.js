@@ -120,16 +120,18 @@
         if (!G.validKey(p, key)) continue;
         const correct = p === 'p3' ? G.sameNumber(value, key) : value === key;
         if (part < 2) {
-          if (G.validKey(p, value)) mark(sheetCtx, O.choicePosition(p, i, j, value), correct);
+          if (G.validKey(p, value)) mark(sheetCtx, O.choicePosition(p, i, j, value, r.profile), correct);
           if (!correct) {
-            const pos = O.choicePosition(p, i, j, key); mark(sheetCtx, pos, true, true);
+            const pos = O.choicePosition(p, i, j, key, r.profile); mark(sheetCtx, pos, true, true);
             if (!value) { text(sheetCtx, '×', pos.x - 17, pos.y - 9, 20, '#df202b', true); }
           }
         } else {
-          const x = 74 + i * 177.5;
-          sheetCtx.fillStyle = correct ? '#e5f7ea' : '#fff0f0'; sheetCtx.fillRect(x + 5, 1228, 158, 31);
-          text(sheetCtx, `${correct ? '✓' : '×'} Câu ${i + 1}`, x + 13, 1251, 22, correct ? '#078735' : '#df202b', true);
-          if (!correct) { sheetCtx.fillStyle = '#fff0f0'; sheetCtx.fillRect(x + 5, 1669, 158, 26); fitted(sheetCtx, `ĐA: ${key}`, x + 12, 1689, 145, 18, '#df202b'); }
+          const standard = r.profile === 'standard';
+          const x = standard ? (128 + i * 163.8) * 1229 / 1241 : 74 + i * 177.5;
+          const top = standard ? 1218 : 1228, bottom = standard ? 1615 : 1669;
+          sheetCtx.fillStyle = correct ? '#e5f7ea' : '#fff0f0'; sheetCtx.fillRect(x + 5, top, standard ? 148 : 158, 31);
+          text(sheetCtx, `${correct ? '✓' : '×'} Câu ${i + 1}`, x + 13, top + 23, 22, correct ? '#078735' : '#df202b', true);
+          if (!correct) { sheetCtx.fillStyle = '#fff0f0'; sheetCtx.fillRect(x + 5, bottom, standard ? 148 : 158, 26); fitted(sheetCtx, `ĐA: ${key}`, x + 12, bottom + 20, 145, 18, '#df202b'); }
         }
       }
     }

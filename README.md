@@ -90,3 +90,11 @@ Màn hình rộng tối đa 600px dùng thanh điều hướng cố định: **C
 ### Nhận dạng trong điều kiện ánh sáng thay đổi
 
 Bộ đọc ước lượng độ sáng giấy quanh từng ô và dùng ngưỡng tương phản cục bộ, giúp đọc nét tô nhạt và hạn chế nhầm bóng đổ thành đáp án. Mốc căn chỉnh cũng dùng tương phản với vùng giấy xung quanh. Ô tô nhiều hoặc không đủ rõ vẫn được đánh dấu để kiểm tra. Đã kiểm tra bằng ảnh mô phỏng độ tương phản thấp, vùng tối, ánh sáng thay đổi theo chiều ngang và ảnh phiếu mẫu; chưa có bộ ảnh chụp thực tế đủ lớn để công bố tỷ lệ chính xác.
+
+### Camera quét liên tiếp và hai mẫu phiếu
+
+Bấm **Mở camera** để mở màn hình quét phủ toàn bộ vùng hiển thị web. Viền xanh bám theo phiếu; bốn ô vuông định vị được highlight. Viền vàng yêu cầu đưa máy gần hơn hoặc làm rõ nét tô. Giữ phiếu ổn định khoảng một giây để tự lưu, căn chỉnh và chấm; màn hình tiếp tục quét phiếu sau. Có nút **Tạm dừng quét**, **Chụp thủ công** và đóng camera.
+
+Trong một lượt mở camera, SBD/mã đề đã đọc rõ được dùng để tránh quét trùng. Phiếu thiếu SBD cần đưa ra khỏi camera trước khi quét bài khác có cùng đáp án; nút chụp thủ công cho phép lưu lại khi cần. Đóng camera hoặc chuyển ứng dụng sẽ tắt luồng camera; bài đã lưu vẫn ở trong danh sách của phiên trình duyệt.
+
+Web tự phân biệt mẫu ảnh YoungMix và `template/PHIEU TLTN CHUAN.pdf`, sử dụng vị trí mốc/ô riêng cho từng mẫu; PDF bài đã chấm cũng đặt dấu đúng/sai theo đúng mẫu. Bộ tìm mốc chấp nhận ô vuông xoay nghiêng và tinh chỉnh tâm mốc trên ảnh gốc để giảm lệch do thu nhỏ. Các kiểm tra đã dùng phiếu nghiêng 18 độ trên nền bàn có vật gây nhiễu và video mô phỏng quét hai mẫu liên tiếp. Camera điện thoại thực tế vẫn cần kiểm tra thêm; không công bố tỷ lệ chính xác từ các mô phỏng này.

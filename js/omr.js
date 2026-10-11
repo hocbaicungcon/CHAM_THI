@@ -79,29 +79,32 @@
     const marked = top.value > .32 && next.value <= .32 && top.value - next.value > .13;
     return { value: marked ? labels[top.i] : '', flag: marked ? '' : top.value > .24 ? 'Không rõ hoặc tô nhiều' : 'Bỏ trống' };
   }
-  function read(dot) {
-    const answers = { p1: [], p2: [], p3: [] }, flags = { p1: [], p2: [], p3: [] }, bases = [133, 411, 689, 967];
+  function read(dot, profile = 'youngmix') {
+    const standard = profile === 'standard';
+    if (standard) { const original = dot; dot = (x,y) => original(x * 1229 / 1241,y); }
+    const answers = { p1: [], p2: [], p3: [] }, flags = { p1: [], p2: [], p3: [] }, bases = standard ? [173,428.5,684,939.5] : [133,411,689,967];
     for (let q = 0; q < template.limits[0]; q++) {
-      const x = bases[Math.floor(q / 10)], y = 644 + 29.5 * (q % 10);
-      const result = choose([0, 1, 2, 3].map(j => dot(x + 49 * j, y)), ['A', 'B', 'C', 'D']);
+      const x = bases[Math.floor(q / 10)], y = standard ? 670 + 26.4 * (q % 10) : 644 + 29.5 * (q % 10);
+      const result = choose([0, 1, 2, 3].map(j => dot(x + (standard ? 51.1 : 49) * j, y)), ['A', 'B', 'C', 'D']);
       answers.p1.push(result.value); flags.p1.push(result.flag);
     }
     for (let q = 0; q < template.limits[1]; q++) {
-      const x = bases[Math.floor(q / 2)] + (q % 2) * 98, row = [], rowFlags = [];
+      const x = bases[Math.floor(q / 2)] + (q % 2) * (standard ? 102.2 : 98), row = [], rowFlags = [];
       for (let j = 0; j < 4; j++) {
-        const y = 1060 + 30 * j, result = choose([dot(x, y), dot(x + 49, y)], ['Đ', 'S']);
+        const y = standard ? 1051 + 26.4 * j : 1060 + 30 * j, result = choose([dot(x, y), dot(x + (standard ? 51.1 : 49), y)], ['Đ', 'S']);
         row.push(result.value); rowFlags.push(result.flag);
       }
       answers.p2.push(row); flags.p2.push(rowFlags);
     }
     for (let q = 0; q < template.limits[2]; q++) {
-      const x = 126 + q * 177.5, digits = [], columnFlags = [];
+      const x = standard ? 165 + q * 163.8 : 126 + q * 177.5, digits = [], columnFlags = [];
+      const spacing = standard ? 34.4 : 30;
       for (let col = 0; col < 4; col++) {
-        const result = choose(Array.from({ length: 10 }, (_, d) => dot(x + 30 * col, 1348 + 33 * d)), '0123456789'.split(''));
+        const result = choose(Array.from({ length: 10 }, (_, d) => dot(x + spacing * col, standard ? 1340 + 27.15 * d : 1348 + 33 * d)), '0123456789'.split(''));
         digits.push(result.value); columnFlags.push(result.flag);
       }
-      const negative = dot(x, 1283) > .32;
-      const commaResult = choose([dot(x + 30, 1317), dot(x + 60, 1317)], ['1', '2']);
+      const negative = dot(x, standard ? 1286 : 1283) > .32;
+      const commaResult = choose([dot(x + spacing, standard ? 1313 : 1317), dot(x + spacing * 2, standard ? 1313 : 1317)], ['1', '2']);
       const comma = commaResult.value ? Number(commaResult.value) : null;
       // Insert the separator before trimming unused physical digit columns.
       let raw = digits.map(value => value || ' ').join('');
@@ -113,8 +116,8 @@
       const uncertain = columnFlags.some(flag => flag === 'Không rõ hoặc tô nhiều') || gap || !validNumber || commaResult.flag === 'Không rõ hoặc tô nhiều';
       answers.p3.push(value); flags.p3.push(uncertain ? 'Kiểm tra số: có ô không rõ, khoảng trống hoặc dấu phẩy không rõ' : '');
     }
-    const digits = (x, columns) => Array.from({ length: columns }, (_, col) => choose(Array.from({ length: 10 }, (_, d) => dot(x + 24 * col, 200 + 34.5 * d)), '0123456789'.split('')));
-    const student = digits(861, 8), exam = digits(1075, 4);
+    const digits = (x, columns) => Array.from({ length: columns }, (_, col) => choose(Array.from({ length: 10 }, (_, d) => dot(x + 24 * col, standard ? 195 + 33.9 * d : 200 + 34.5 * d)), '0123456789'.split('')));
+    const student = digits(standard ? 835 : 861, 8), exam = digits(standard ? 1062 : 1075, 4);
     const metadata = {
       studentId: student.map(v => v.value).join(''),
       examCode: exam.map(v => v.value).join(''),
@@ -123,7 +126,7 @@
     };
     return { answers, flags, metadata };
   }
-  function recognize(imageData, points) { return read(detector(imageData, points)); }
+  function recognize(imageData, points, profile) { return read(detector(imageData, points), profile); }
 
   // Find the four square registration marks. Timing marks resolve page rotation.
   function autoAlign(imageData) {
@@ -147,23 +150,30 @@
     const queue = new Int32Array(w * h), candidates = [];
     for (let start = 0; start < mask.length; start++) {
       if (!mask[start]) continue;
-      let head = 0, tail = 1, minX = w, maxX = 0, minY = h, maxY = 0;
+      let head = 0, tail = 1, minX = w, maxX = 0, minY = h, maxY = 0, sumX = 0, sumY = 0;
       queue[0] = start; mask[start] = 0;
       while (head < tail) {
         const index = queue[head++], x = index % w, y = Math.floor(index / w);
+        sumX += x; sumY += y;
         minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
         for (const next of [x > 0 ? index - 1 : -1, x < w - 1 ? index + 1 : -1, y > 0 ? index - w : -1, y < h - 1 ? index + w : -1]) {
           if (next >= 0 && mask[next]) { mask[next] = 0; queue[tail++] = next; }
         }
       }
       const cw = maxX - minX + 1, ch = maxY - minY + 1, ratio = cw / ch;
-      if (tail >= 9 && ratio > .65 && ratio < 1.55 && tail / (cw * ch) > .65 && cw < w * .08 && ch < h * .08) {
-        candidates.push({ x: (minX + maxX) * step / 2, y: (minY + maxY) * step / 2, size: Math.sqrt(tail) * step });
+      if (tail >= 9 && ratio > .55 && ratio < 1.8 && tail / (cw * ch) > .42 && cw < w * .08 && ch < h * .08) {
+        // Refine each coarse component on the original pixels. Downsampling
+        // can shift a small marker by several pixels in a phone preview.
+        let sx = 0, sy = 0, pixels = 0;
+        for (let yy = Math.max(0,(minY-1)*step); yy <= Math.min(height-1,(maxY+1)*step); yy++)
+          for (let xx = Math.max(0,(minX-1)*step); xx <= Math.min(width-1,(maxX+1)*step); xx++)
+            if (dark(xx,yy)) { sx += xx; sy += yy; pixels++; }
+        candidates.push({ x: pixels ? sx/pixels : sumX*step/tail, y: pixels ? sy/pixels : sumY*step/tail, size: pixels ? Math.sqrt(pixels) : Math.sqrt(tail)*step });
       }
     }
     const groups = [[], [], [], []];
     for (const p of candidates) {
-      const left = p.x < width * .45, right = p.x > width * .55, top = p.y < height * .35, bottom = p.y > height * .65;
+      const left = p.x < width * .45, right = p.x > width * .55, top = p.y < height * .43, bottom = p.y > height * .57;
       const group = top && left ? 0 : top && right ? 1 : bottom && right ? 2 : bottom && left ? 3 : -1;
       if (group >= 0) groups[group].push(p);
     }
@@ -172,19 +182,24 @@
     if (groups.some(group => !group.length)) return null;
     const anchors = [[39, 31], [1196, 31], [1196, 1701], [39, 1701]];
     const timing = [[39, 569], [39, 952], [39, 1198], [1196, 131], [1196, 187], [1196, 222], [1196, 256], [1196, 291], [1196, 325], [1196, 359], [1196, 394], [1196, 428], [1196, 463], [1196, 497]];
+    const standardAnchors = [[76,76],[1162,76],[1162,1678],[76,1678]].map(([x,y])=>[x*1229/1241,y]);
+    const standardTiming = [[811,76],[76,550],[806,550],[1162,550],[1032,348],[1032,519],[364,628],[620,628],[875,628],[364,932],[620,932],[875,932],[364,975],[620,975],[875,975],[364,1155],[620,1155],[875,1155],[292,1178],[455,1178],[783,1178],[947,1178],[292,1638],[455,1638],[620,1638],[783,1638],[947,1638]].map(([x,y])=>[x*1229/1241,y]);
+    const layouts = [{profile:'youngmix',anchors,timing},{profile:'standard',anchors:standardAnchors,timing:standardTiming}];
     let best = null;
-    for (const a of groups[0].slice(0, 4)) for (const b of groups[1].slice(0, 4)) for (const c of groups[2].slice(0, 4)) for (const d of groups[3].slice(0, 4)) {
+    for (const a of groups[0].slice(0, 6)) for (const b of groups[1].slice(0, 6)) for (const c of groups[2].slice(0, 6)) for (const d of groups[3].slice(0, 6)) {
       const quad = [a, b, c, d], sizes = quad.map(p => p.size);
-      if (Math.max(...sizes) / Math.min(...sizes) > 2.3) continue;
+      if (Math.max(...sizes) / Math.min(...sizes) > 2.8) continue;
       const area = Math.abs(quad.reduce((sum, p, i) => { const next = quad[(i + 1) % 4]; return sum + p.x * next.y - next.x * p.y; }, 0)) / 2;
-      if (area < width * height * .25) continue;
+      if (area < width * height * .12) continue;
       for (let rotation = 0; rotation < 4; rotation++) {
         const rotated = quad.map((_, i) => quad[(i + rotation) % 4]);
         try {
-          const map = project(rotated, anchors);
-          const hits = timing.reduce((sum, [x, y]) => { const p = map(x, y); return sum + (dark(p.x, p.y) ? 1 : 0); }, 0);
-          const score = hits + area / (width * height) * .1;
-          if (hits >= 8 && (!best || score > best.score)) best = { score, points: [[0, 0], [1229, 0], [1229, 1754], [0, 1754]].map(([x, y]) => map(x, y)), rotation };
+          for (const layout of layouts) {
+          const map = project(rotated, layout.anchors);
+          const hits = layout.timing.reduce((sum, [x, y]) => { const p = map(x, y); return sum + (dark(p.x, p.y) ? 1 : 0); }, 0);
+          const score = hits / layout.timing.length + area / (width * height) * .02;
+          if (hits >= 8 && hits / layout.timing.length >= .6 && (!best || score > best.score)) best = { score, profile:layout.profile, markers:rotated.map(p=>({x:p.x,y:p.y,size:p.size})), points: [[0, 0], [1229, 0], [1229, 1754], [0, 1754]].map(([x, y]) => map(x, y)), rotation };
+          }
         } catch (_) { /* Try another quadrilateral. */ }
       }
     }
@@ -200,7 +215,15 @@
     }
     return { data: output, width, height };
   }
-  function choicePosition(part, index, sub, value) {
+  function choicePosition(part, index, sub, value, profile) {
+    if (profile === 'standard') {
+      let x,y;
+      const bases = [173,428.5,684,939.5];
+      if (part === 'p1') { x=bases[Math.floor(index/10)]+51.1*'ABCD'.indexOf(value); y=670+26.4*(index%10); }
+      else if (part === 'p2') { x=bases[Math.floor(index/2)]+(index%2)*102.2+(value==='S'?51.1:0); y=1051+26.4*sub; }
+      else { x=165+index*163.8; y=1235; }
+      return {x:x*1229/1241,y};
+    }
     const bases = [133, 411, 689, 967];
     if (part === 'p1') return { x: bases[Math.floor(index / 10)] + 49 * 'ABCD'.indexOf(value), y: 644 + 29.5 * (index % 10) };
     if (part === 'p2') return { x: bases[Math.floor(index / 2)] + (index % 2) * 98 + (value === 'S' ? 49 : 0), y: 1060 + 30 * sub };

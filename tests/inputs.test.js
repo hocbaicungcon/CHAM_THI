@@ -130,3 +130,45 @@ test('uneven lighting across the sheet does not turn blank bubbles into answers'
   assert.ok(result.answers.p1.slice(1).every(value=>value===''));
   assert.equal(result.metadata.studentId,'00123456');
 });
+
+test('both actual blank sheet layouts align without reading printed outlines as answers',()=>{
+ const png=require('./png-fixture');
+ for(const [file,profile] of [['PHIEU_CHAM_TN.png','youngmix'],['PHIEU_TLTN_CHUAN.png','standard']]){
+  const image=png(path.join(__dirname,'../template',file));const aligned=OMR.autoAlign(image);assert.ok(aligned,file);assert.equal(aligned.profile,profile);
+  const result=OMR.recognize(image,aligned.points,profile);assert.ok(result.answers.p1.every(v=>!v));assert.ok(result.answers.p2.flat().every(v=>!v));assert.ok(result.answers.p3.every(v=>!v));
+ }
+});
+test('standard PDF layout reads every answer column and metadata after rotation',()=>{
+ const png=require('./png-fixture'),image=png(path.join(__dirname,'../template/PHIEU_TLTN_CHUAN.png'));
+ const box=(x,y)=>{for(let dy=-6;dy<=6;dy++)for(let dx=-6;dx<=6;dx++){const k=(Math.round(y+dy)*image.width+Math.round(x+dx))*4;image.data[k]=image.data[k+1]=image.data[k+2]=25;}};
+ for(let q=0;q<40;q++)box([173,428.5,684,939.5][Math.floor(q/10)]+51.1*(q%4),670+26.4*(q%10));
+ for(let q=0;q<8;q++)for(let j=0;j<4;j++)box([173,428.5,684,939.5][Math.floor(q/2)]+(q%2)*102.2+(j%2)*51.1,1051+26.4*j);
+ for(let q=0;q<6;q++){const x=165+q*163.8;box(x,1340+27.15*q);box(x+34.4,1340+27.15*(q+1));box(x+34.4,1313);}
+ '00123457'.split('').forEach((v,i)=>box(835+24*i,195+33.9*Number(v)));
+ '0101'.split('').forEach((v,i)=>box(1062+24*i,195+33.9*Number(v)));
+ let rotated=image;
+ for(let rotation=0;rotation<4;rotation++){
+  const aligned=OMR.autoAlign(rotated);assert.ok(aligned);assert.equal(aligned.profile,'standard');const result=OMR.recognize(rotated,aligned.points,aligned.profile);
+  assert.deepEqual(result.answers.p1,Array.from({length:40},(_,q)=>'ABCD'[q%4]));assert.deepEqual(result.answers.p2,Array.from({length:8},()=>['Đ','S','Đ','S']));assert.deepEqual(result.answers.p3,['0,1','1,2','2,3','3,4','4,5','5,6']);assert.equal(result.metadata.studentId,'00123457');assert.equal(result.metadata.examCode,'0101');
+  rotated=rotate90(rotated);
+ }
+});
+
+test('camera alignment reads a tilted sheet on a cluttered desk at smaller scale',()=>{
+ const sources=[markedSheet(),require('./png-fixture')(path.join(__dirname,'../template/PHIEU_TLTN_CHUAN.png'))];
+ const standard=sources[1];
+ for(const [x,y] of [[224,670],...'00123457'.split('').map((v,i)=>[835+24*i,195+33.9*Number(v)]),...'0101'.split('').map((v,i)=>[1062+24*i,195+33.9*Number(v)])])
+  for(let dy=-6;dy<=6;dy++)for(let dx=-6;dx<=6;dx++){const k=(Math.round(y+dy)*standard.width+Math.round(x+dx))*4;standard.data[k]=standard.data[k+1]=standard.data[k+2]=25;}
+ for(const [index,source]of sources.entries()){
+  const width=1600,height=2300,data=new Uint8ClampedArray(width*height*4),angle=Math.PI/10,c=Math.cos(angle),s=Math.sin(angle),scale=.7;
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+   const dx=x-width/2,dy=y-height/2,sx=Math.round((c*dx+s*dy)/scale+source.width/2),sy=Math.round((-s*dx+c*dy)/scale+source.height/2),k=(y*width+x)*4;
+   if(sx>=0&&sy>=0&&sx<source.width&&sy<source.height){const from=(sy*source.width+sx)*4;data[k]=source.data[from];data[k+1]=source.data[from+1];data[k+2]=source.data[from+2];}
+   else {data[k]=130;data[k+1]=115;data[k+2]=95;}
+   if((x>35&&x<90&&y>35&&y<90)||(x>1490&&x<1560&&y>2150&&y<2220))data[k]=data[k+1]=data[k+2]=0;
+   data[k+3]=255;
+  }
+  const image={width,height,data},aligned=OMR.autoAlign(image);assert.ok(aligned);assert.equal(aligned.profile,index?'standard':'youngmix');
+  const result=OMR.recognize(image,aligned.points,aligned.profile);assert.equal(result.answers.p1[0],'B');assert.equal(result.metadata.studentId,index?'00123457':'00123456');assert.equal(result.metadata.examCode,'0101');
+ }
+});

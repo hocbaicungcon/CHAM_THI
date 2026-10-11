@@ -83,8 +83,9 @@
       const noise = Math.max(8, paper * .035);
       const fullContrast = Math.max(24, paper * .18);
       let samples = 0; const contrasts = [];
-      for (let dy = -4; dy <= 4; dy += 1) for (let dx = -4; dx <= 4; dx += 1) {
-        if (dx * dx + dy * dy > 16) continue;
+      // Include strokes around a white central gap, staying inside the rim.
+      for (let dy = -6; dy <= 6; dy += 1) for (let dx = -6; dx <= 6; dx += 1) {
+        if (dx * dx + dy * dy > 36) continue;
         const pixel = sample(x + dx, y + dy);
         if (!pixel) continue;
         contrasts.push(pixel.excludedColor ? 0 : Math.max(0, Math.min(1, (paper - pixel.luminance - noise) / (fullContrast - noise))));

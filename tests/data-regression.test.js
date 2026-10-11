@@ -3,6 +3,22 @@ const O=require('../js/omr'),readPng=require('./png-fixture');
 const source=path.resolve(__dirname,'../data/bai-lam-da-cham.pdf');
 const thirdSource=path.resolve(__dirname,'../data/bai-lam-da-cham 3.pdf');
 const fourthSource=path.resolve(__dirname,'../data/bai-lam-da-cham 4.pdf');
+const fifthSource=path.resolve(__dirname,'../data/bai-lam-da-cham 5.pdf');
+test('local fifth PDF accepts question three with a white gap in its fill at import sizes',{skip:!fs.existsSync(fifthSource)},t=>{
+ if(spawnSync('pdftoppm',['-v']).error)return t.skip('Poppler unavailable');
+ const folder=fs.mkdtempSync(path.join(os.tmpdir(),'chamtn-fifth-'));
+ try{
+  for(const size of [1754,1697]){
+   const prefix=path.join(folder,'sheet'+size);
+   const render=spawnSync('pdftoppm',['-f','1','-l','1','-scale-to',String(size),'-png',fifthSource,prefix]);
+   assert.equal(render.status,0,render.stderr?.toString());
+   const image=readPng(prefix+'-1.png'),aligned=O.autoAlign(image);assert.ok(aligned);
+   const result=O.recognize(image,aligned.points,aligned.profile);
+   assert.equal(result.answers.p1[2],'C');assert.equal(result.flags.p1[2],'');
+   assert.ok(result.answers.p1.slice(12).every(v=>!v));
+  }
+ }finally{fs.rmSync(folder,{recursive:true,force:true});}
+});
 test('local fourth PDF aligns despite its header and accepts the incomplete C fill',{skip:!fs.existsSync(fourthSource)},t=>{
  if(spawnSync('pdftoppm',['-v']).error)return t.skip('Poppler unavailable');
  const folder=fs.mkdtempSync(path.join(os.tmpdir(),'chamtn-fourth-'));

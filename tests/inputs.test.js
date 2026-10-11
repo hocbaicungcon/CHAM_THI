@@ -155,6 +155,19 @@ test('both actual blank sheet layouts align without reading printed outlines as 
   const result=OMR.recognize(image,aligned.points,profile);assert.ok(result.answers.p1.every(v=>!v));assert.ok(result.answers.p2.flat().every(v=>!v));assert.ok(result.answers.p3.every(v=>!v));
  }
 });
+test('pencil surrounding a white central gap is accepted while another marked choice is still rejected',()=>{
+ const image=require('./png-fixture')(path.join(__dirname,'../template/PHIEU_CHAM_TN.png'));
+ const aligned=OMR.autoAlign(image),map=OMR.project(aligned.points);
+ const fill=x=>{for(let dy=-7;dy<=7;dy++)for(let dx=-7;dx<=7;dx++){
+  const radius=dx*dx+dy*dy;if(radius>49||radius<10)continue;
+  const p=map(x+dx,703+dy),k=(Math.round(p.y)*image.width+Math.round(p.x))*4;
+  image.data[k]=image.data[k+1]=image.data[k+2]=40;
+ }};
+ fill(231);
+ assert.equal(OMR.recognize(image,aligned.points,aligned.profile).answers.p1[2],'C');
+ fill(182);
+ assert.equal(OMR.recognize(image,aligned.points,aligned.profile).answers.p1[2],'');
+});
 test('standard PDF layout reads every answer column and metadata after rotation',()=>{
  const png=require('./png-fixture'),image=png(path.join(__dirname,'../template/PHIEU_TLTN_CHUAN.png'));
  const box=(x,y)=>{for(let dy=-6;dy<=6;dy++)for(let dx=-6;dx<=6;dx++){const k=(Math.round(y+dy)*image.width+Math.round(x+dx))*4;image.data[k]=image.data[k+1]=image.data[k+2]=25;}};

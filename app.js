@@ -60,7 +60,8 @@ function updateButtons() {
   const r = current(), errors = G.validateConfig(config());
   $('analyze').disabled = !r || r.points.length !== 4 || errors.length > 0 || !config().parts.some(p => p.count > 0) || loading;
   $('viewAnnotated').disabled = !r?.answers;
-  $('resetCorners').disabled = !r || loading; $('clearBatch').disabled = !records.length;
+  $('resetCorners').disabled = !r || loading; $('clearBatch').disabled = !records.length || exporting;
+  $('newBatch').disabled = !records.length || exporting;
   $('export').disabled = !r?.answers || errors.length > 0;
   for (const id of ['exportExcel', 'exportSummaryPdf', 'exportAnnotatedPdf']) $(id).disabled = !records.length || !!errors.length || loading || exporting;
 }
@@ -258,7 +259,23 @@ async function loadFiles(files) {
 $('file').onchange = event => { loadFiles([...event.target.files]); event.target.value = ''; };
 $('cameraFile').onchange = event => { loadFiles([...event.target.files]); event.target.value = ''; };
 $('cancelLoad').onclick = () => { loadVersion++; loading = false; $('cancelLoad').classList.add('hidden'); $('uploadStatus').textContent = 'Đã dừng tải. Các trang đã xử lý được giữ lại.'; refresh(); };
-$('clearBatch').onclick = () => { loadVersion++; loading = false; records = []; activeId = ''; annotatedView = false; $('cancelLoad').classList.add('hidden'); $('uploadStatus').textContent = ''; $('results').classList.add('hidden'); renderPicker(); refresh(); draw(); };
+async function clearGradedData() {
+  stopCamera(); loadVersion++; loading = false;
+  records = []; activeId = ''; nextId = 0; annotatedView = false;
+  cameraCount = 0; cameraPreviewRecord = null;
+  $('cameraCount').textContent = '0 bài đã lưu'; $('cameraLast').textContent = '';
+  $('cameraPreview').classList.add('hidden');
+  $('studentId').value = ''; $('detectedCode').textContent = 'Chưa đọc được';
+  $('cancelLoad').classList.add('hidden'); $('uploadStatus').textContent = '';
+  $('scanError').textContent = ''; $('exportStatus').textContent = '';
+  renderPicker(); refresh(); draw();
+  try {
+    await localSave;
+    if (!records.length) $('sessionStatus').textContent = 'Đã xóa bài chấm và bản lưu tạm · Sẵn sàng chấm đợt mới';
+  } catch (_) { $('sessionStatus').textContent = 'Chưa xóa được bản lưu tạm trên thiết bị. Hãy thử lại trước khi tải lại trang.'; }
+}
+$('clearBatch').onclick = clearGradedData;
+$('newBatch').onclick = clearGradedData;
 canvas.onclick = event => {
   const r = current(); if (!r || annotatedView) return;
   if (r.points.length === 4) r.points = [];

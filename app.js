@@ -9,6 +9,19 @@ const cameraGate = new window.ChamTNScanner.ScanGate();
 let cameraPreviewRecord = null, cameraAlignment = null;
 let cameraTimer = null, cameraPaused = false, cameraBusy = false, cameraCount = 0;
 let loading = false, exporting = false, annotatedView = false, cameraStream = null, cameraVersion = 0;
+let restoringSession = true, localSave = Promise.resolve(), saveRevision = 0;
+function saveSession() {
+  if (restoringSession) return localSave;
+  const revision = ++saveRevision;
+  $('sessionStatus').textContent = 'Đang lưu trên thiết bị…';
+  localSave = window.ChamTNSession.save(records, { activeId, nextId, cameraCount, annotatedView });
+  localSave.then(() => {
+    if (revision === saveRevision) $('sessionStatus').textContent = records.length ? `Đã lưu cục bộ ${records.length} bài · Tự khôi phục khi mở lại` : 'Lưu tự động trên thiết bị';
+  }, () => {
+    if (revision === saveRevision) $('sessionStatus').textContent = 'Không lưu được trên thiết bị. Hãy xuất kết quả trước khi đóng trang.';
+  });
+  return localSave;
+}
 function stored(key) { try { return localStorage.getItem('chamtn:' + key); } catch (_) { return null; } }
 function persist(key, value) { try { localStorage.setItem('chamtn:' + key, value); } catch (_) {} }
 function save(id) { persist(id, $(id).value); }
@@ -213,6 +226,7 @@ async function addSource(source, label, activate = true, alignment = null) {
   }
   records.push(record); if (assess(record).result?.scores && !record.error && !G.validateConfig(config()).length) soundGraded();
   if (activate || !activeId) selectRecord(record.id); else { renderPicker(); refresh(); }
+  await localSave.catch(() => {});
   await new Promise(resolve => setTimeout(resolve, 0));
   return record;
 }
@@ -257,7 +271,7 @@ $('analyze').onclick = () => {
   try { recognizeRecord(r); selectRecord(r.id); if (assess(r).result?.scores) soundGraded(); }
   catch (error) { r.error = error.message; $('scanError').textContent = 'Không thể đọc phiếu: ' + error.message; }
 };
-$('viewAnnotated').onclick = () => { annotatedView = !annotatedView; draw(); };
+$('viewAnnotated').onclick = () => { annotatedView = !annotatedView; draw(); saveSession(); };
 function stopCamera() {
   const wasOpen = !$('cameraPanel').classList.contains('hidden');
   cameraVersion++; clearTimeout(cameraTimer); cameraTimer = null;
@@ -265,7 +279,7 @@ function stopCamera() {
   $('cameraVideo').srcObject = null; $('cameraPanel').classList.add('hidden'); $('captureCamera').disabled = true;
   $('cameraPanel').classList.remove('showing-preview'); document.body.classList.remove('camera-open'); drawCameraOverlay(null); cameraGate.reset(); cameraBusy = false; cameraAlignment = null;
   if (document.activeElement && $('cameraPanel').contains(document.activeElement)) $('openCamera').focus();
-  if (wasOpen && current()?.answers) { annotatedView = true; draw(); }
+  if (wasOpen && current()?.answers) { annotatedView = true; draw(); saveSession(); }
 }
 function cameraSource() {
   const video = $('cameraVideo'), stage = $('cameraOverlay').parentElement;
@@ -435,6 +449,7 @@ function answerItem(record, part, index, value, sub) {
 }
 $('studentId').oninput = () => { const r = current(); if (r) { r.studentId = $('studentId').value; r.studentEdited = true; refresh(); } };
 function refresh() {
+  saveSession();
   const r = current(); $('results').classList.toggle('hidden', !r?.answers); $('batchPanel').classList.toggle('hidden', !records.length);
   const items = records.map(assess), ready = items.filter(item => item.result?.scores).length;
   $('batchSummary').textContent = `${records.length} bài / trang · ${ready} bài đã tính điểm · ${records.length - ready} bài chưa tính được điểm.`;
@@ -497,3 +512,27 @@ $('export').onclick = () => {
   download(csv, 'chi-tiet-bai-cham.csv', 'text/csv;charset=utf-8');
 };
 renderExamPicker(); if (exams.length) showKeys(preferredCode); updateConfiguration(); draw();
+async function restoreSession() {
+  const surfaces = [document.querySelector('main'), document.querySelector('.mobile-nav')];
+  surfaces.forEach(element => { element.inert = true; });
+  try {
+    const saved = await window.ChamTNSession.load();
+    if (saved) {
+      records = saved.records; nextId = Math.max(saved.nextId || 0, ...records.map(r => Number(r.id) || 0)); cameraCount = saved.cameraCount || 0;
+      activeId = records.some(r => r.id === saved.activeId) ? saved.activeId : records[0]?.id || '';
+      if (activeId) selectRecord(activeId);
+      annotatedView = !!current()?.answers; draw();
+    }
+    $('sessionStatus').textContent = records.length ? `Đã khôi phục ${records.length} bài trên thiết bị` : 'Lưu tự động trên thiết bị';
+  } catch (_) { $('sessionStatus').textContent = 'Không mở được bộ nhớ cục bộ. Hãy xuất kết quả trước khi đóng trang.'; }
+  finally { restoringSession = false; surfaces.forEach(element => { element.inert = false; }); }
+}
+restoreSession();
+if ('serviceWorker' in navigator) {
+  $('offlineStatus').textContent = 'Đang chuẩn bị sử dụng ngoại tuyến…';
+  navigator.serviceWorker.register('./sw.js').then(async () => {
+    await navigator.serviceWorker.ready;
+    $('sessionStatus').dataset.offlineReady = 'true';
+    $('offlineStatus').textContent = 'Sẵn sàng dùng khi mất mạng';
+  }).catch(() => { $('offlineStatus').textContent = 'Chưa tải được bộ nhớ ngoại tuyến. Dữ liệu bài vẫn được lưu trên thiết bị.'; });
+}

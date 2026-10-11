@@ -113,3 +113,11 @@ Phần III cũng nhận `O` (mọi đáp án số hợp lệ, không nhận bỏ
 
 ### Nhập mã đề thủ công và bám mốc camera
 Có ô mã đề (1–4 chữ số) và nút “Lưu mã đề & đáp án” để thêm hoặc cập nhật bộ đáp án. Khi gõ mã mới, đáp án đang sửa được giữ riêng, không ghi đè mã cũ trước khi lưu. Bộ đọc phân biệt nét tô trong lòng ô với viền in, dùng thêm mốc phụ ở mép/bên trong mẫu, hiệu chỉnh độ lệch cục bộ và kiểm chứng lại mốc ở mỗi khung hình trước khi bám nhanh camera. Kiểm tra PDF riêng trong `data` chỉ chạy cục bộ nếu file tồn tại và có Poppler; dữ liệu bài làm không thuộc mã nguồn xuất bản.
+
+### Lưu tạm và sử dụng khi mất mạng
+
+Ảnh gốc, góc căn chỉnh, kết quả nhận dạng, đáp án đã sửa, SBD và mã đề của từng bài được tự động lưu trong IndexedDB trên thiết bị. Cấu hình và đáp án vẫn lưu trong trình duyệt. Mở lại trang sẽ khôi phục danh sách bài và hiển thị bài đã chấm. Đợi thông báo “Đã lưu cục bộ” trước khi đóng trang. “Xóa danh sách” cũng xóa bản lưu tạm của danh sách đó.
+
+Lần mở đầu cần mạng để tải bộ nhớ đệm. Khi xuất hiện “Sẵn sàng dùng khi mất mạng”, trang có thể mở lại, chấm ảnh/PDF và xuất kết quả ngoại tuyến. Dữ liệu lưu trên cùng trình duyệt và thiết bị; xóa dữ liệu website hoặc dùng chế độ riêng tư có thể làm mất bản lưu. Nếu bộ nhớ đầy/không khả dụng, ứng dụng hiển thị lỗi lưu và vẫn cho xuất kết quả.
+
+Khi cập nhật tài nguyên web, cập nhật danh sách `offline-assets.json` và tăng phiên bản cache trong `sw.js`. Không đưa bài học sinh vào danh sách cache hay Git. Cache mới kích hoạt khi các tab dùng phiên bản cũ đã đóng; dữ liệu IndexedDB không bị xóa khi cập nhật cache.

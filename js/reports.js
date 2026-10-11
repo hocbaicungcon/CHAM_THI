@@ -96,10 +96,8 @@
     if (dashed) ctx.setLineDash([4, 3]);
     ctx.beginPath(); ctx.arc(position.x, position.y, 12, 0, Math.PI * 2); ctx.stroke();
     if (!dashed) {
-      ctx.setLineDash([]); ctx.beginPath();
-      if (correct) { ctx.moveTo(position.x - 5, position.y); ctx.lineTo(position.x - 1, position.y + 5); ctx.lineTo(position.x + 7, position.y - 6); }
-      else { ctx.moveTo(position.x - 6, position.y - 6); ctx.lineTo(position.x + 6, position.y + 6); ctx.moveTo(position.x + 6, position.y - 6); ctx.lineTo(position.x - 6, position.y + 6); }
-      ctx.stroke();
+      ctx.setLineDash([]);
+      root.ChamTNIcons.draw(ctx, correct ? 'check' : 'close', position.x - 12, position.y - 12, 24, correct ? '#078735' : '#df202b');
     }
     ctx.restore();
   }
@@ -123,14 +121,15 @@
           if (G.validKey(p, value)) mark(sheetCtx, O.choicePosition(p, i, j, value, r.profile), correct);
           if (!correct) {
             const pos = O.choicePosition(p, i, j, key, r.profile); mark(sheetCtx, pos, true, true);
-            if (!value) { text(sheetCtx, '×', pos.x - 17, pos.y - 9, 20, '#df202b', true); }
+            if (!value) { root.ChamTNIcons.draw(sheetCtx, 'close', pos.x - 24, pos.y - 26, 18, '#df202b'); }
           }
         } else {
           const standard = r.profile === 'standard';
           const x = standard ? (128 + i * 163.8) * 1229 / 1241 : 74 + i * 177.5;
           const top = standard ? 1218 : 1228, bottom = standard ? 1615 : 1669;
           sheetCtx.fillStyle = correct ? '#e5f7ea' : '#fff0f0'; sheetCtx.fillRect(x + 5, top, standard ? 148 : 158, 31);
-          text(sheetCtx, `${correct ? '✓' : '×'} Câu ${i + 1}`, x + 13, top + 23, 22, correct ? '#078735' : '#df202b', true);
+          root.ChamTNIcons.draw(sheetCtx, correct ? 'check' : 'close', x + 10, top + 3, 25, correct ? '#078735' : '#df202b');
+          text(sheetCtx, `Câu ${i + 1}`, x + 40, top + 23, 22, correct ? '#078735' : '#df202b', true);
           if (!correct) { sheetCtx.fillStyle = '#fff0f0'; sheetCtx.fillRect(x + 5, bottom, standard ? 148 : 158, 26); fitted(sheetCtx, `ĐA: ${key}`, x + 12, bottom + 20, 145, 18, '#df202b'); }
         }
       }
@@ -143,7 +142,7 @@
       text(ctx, `${item.result.warnings.length ? 'Điểm tạm tính' : 'Tổng điểm'}: ${fmt(item.result.total)}/${fmt(item.result.maxima.reduce((sum, v) => sum + v, 0))}`, 28, 112, 31, '#147d64', true);
       text(ctx, `Phần I: ${fmt(item.result.scores[0])}/${fmt(item.result.maxima[0])}    Phần II: ${fmt(item.result.scores[1])}/${fmt(item.result.maxima[1])}    Phần III: ${fmt(item.result.scores[2])}/${fmt(item.result.maxima[2])}`, 465, 109, 23);
     } else fitted(ctx, item.status, 28, 111, 1170, 28, '#bb3434');
-    text(ctx, '✓ xanh: đúng · × đỏ: sai · Vòng xanh nét đứt: đáp án chuẩn', 28, 148, 21);
+    text(ctx, 'Vòng xanh: đúng · Vòng đỏ: sai · Vòng xanh nét đứt: đáp án chuẩn', 28, 148, 21);
     fitted(ctx, item.status, 28, 174, 1170, 17, '#7a6843');
     return canvas;
   }

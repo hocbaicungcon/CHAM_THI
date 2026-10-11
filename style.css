@@ -55,3 +55,35 @@ body.camera-open>header,body.camera-open>main,body.camera-open>.mobile-nav,body.
 #cameraOverlay{display:block;position:absolute;inset:0;width:100%;height:100%;max-width:none;pointer-events:none;cursor:default}
 .camera-panel.has-sheet .camera-guide{display:none}
 .camera-actions button{font-size:13px;font-weight:700;line-height:1.3}
+
+/* Shared flat SVG icons and consistent action controls. */
+.icon-sprite{position:absolute;width:0;height:0;overflow:hidden;pointer-events:none}
+.icon{display:block;width:20px;height:20px;flex:0 0 20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.mark .icon{width:24px;height:24px}.mobile-nav .icon{width:23px;height:23px;flex-basis:23px}.mobile-nav .nav-label{font-size:11px;line-height:1.3}
+[data-icon]{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;line-height:1.35}
+[data-icon] .action-label{min-width:0}.camera-close{padding:0}.camera-close .icon{width:22px;height:22px}
+button,.button{touch-action:manipulation}button:focus-visible,.button:focus-visible,summary:focus-visible{outline:3px solid #68bf95;outline-offset:3px}
+.scan-toolbar{display:grid;grid-template-columns:1fr 1fr;align-items:stretch;gap:10px;margin:0 0 12px}.scan-toolbar #scanCameraButton{grid-column:1/-1;background:#147d64;color:white}
+.scan-toolbar #scanCameraButton:hover{background:#116b56}
+.scan :is(.small,.button){min-height:48px;padding:12px 14px;border-radius:12px;font-size:14px;font-weight:650;white-space:normal;margin:0}
+.scan .small{border:1px solid #d9e5dc;background:#f7faf8;color:#236a56}
+.scan :is(.small,.button):disabled{opacity:.42;cursor:not-allowed}
+.scan .danger{background:#fff;color:#a34840;border-color:#eededb}
+.scan-actions,.scan-utilities{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.scan-actions{margin-top:14px}.scan-utilities{padding-top:14px;margin-top:14px;border-top:1px solid #e8eee9}
+.scan-status{display:flex;flex-direction:column;gap:5px;padding-top:14px;color:#6a7c70;font-size:12px;line-height:1.5}
+.scan-status #alignmentStatus:empty{display:none}
+.manual-help{margin-bottom:14px;color:#708278;font-size:12px;line-height:1.5}.manual-help summary{cursor:pointer;padding:8px 0}.manual-help p{margin:6px 0 12px}
+.load-status:has(#uploadStatus:empty):has(#cancelLoad.hidden){display:none}
+#empty .icon{width:36px;height:36px;margin:0 auto 12px;color:#8ba897}
+@media(max-width:600px){
+ .hero{padding:20px}.hero h1{font-size:26px}.hero p:not(.eyebrow){font-size:13px;margin:0}.hero-actions{display:none}
+ .scan-toolbar>*{flex:none}.source-controls #scanCameraButton{width:100%}
+ .scan :is(.small,.button){padding:12px 10px;min-height:48px;font-size:13px}
+ .scan #clearBatch{flex:none;background:#fff;color:#a34840;border-color:#eededb;min-height:48px;font-size:13px}
+ .scan .section-head p{margin-bottom:16px}.scan-actions,.scan-utilities{gap:8px}
+ .scan .canvas-wrap{min-height:240px}.scan .scan-utilities .icon{width:18px;height:18px;flex-basis:18px}
+ .camera-actions button{display:flex;min-height:48px;padding:12px 8px;gap:7px}
+}
+@media(max-width:350px){.scan-actions,.scan-utilities{grid-template-columns:1fr}.scan-toolbar{gap:8px}.scan-toolbar .small{font-size:12px;padding:12px 8px}.scan .icon{width:18px;height:18px;flex-basis:18px}}
+[data-icon].hidden,[data-icon][hidden]{display:none}

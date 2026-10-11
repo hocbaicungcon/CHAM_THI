@@ -98,3 +98,7 @@ Bấm **Mở camera** để mở màn hình quét phủ toàn bộ vùng hiển 
 Trong một lượt mở camera, SBD/mã đề đã đọc rõ được dùng để tránh quét trùng. Phiếu thiếu SBD cần đưa ra khỏi camera trước khi quét bài khác có cùng đáp án; nút chụp thủ công cho phép lưu lại khi cần. Đóng camera hoặc chuyển ứng dụng sẽ tắt luồng camera; bài đã lưu vẫn ở trong danh sách của phiên trình duyệt.
 
 Web tự phân biệt mẫu ảnh YoungMix và `template/PHIEU TLTN CHUAN.pdf`, sử dụng vị trí mốc/ô riêng cho từng mẫu; PDF bài đã chấm cũng đặt dấu đúng/sai theo đúng mẫu. Bộ tìm mốc chấp nhận ô vuông xoay nghiêng và tinh chỉnh tâm mốc trên ảnh gốc để giảm lệch do thu nhỏ. Các kiểm tra đã dùng phiếu nghiêng 18 độ trên nền bàn có vật gây nhiễu và video mô phỏng quét hai mẫu liên tiếp. Camera điện thoại thực tế vẫn cần kiểm tra thêm; không công bố tỷ lệ chính xác từ các mô phỏng này.
+
+### Nút thao tác và icon
+
+Panel quét dùng nút thao tác cao tối thiểu 48px, nhóm nhập bài, đọc/xem bài và thao tác đặt lại/xóa riêng. Các nút chưa sử dụng được sẽ khóa khi danh sách trống. Nút tải file hỗ trợ bàn phím và chạm. Toàn bộ icon giao diện dùng SVG phẳng cục bộ trong một sprite, chia sẻ cả đường nét dấu đúng/sai cho ảnh/PDF bài chấm.

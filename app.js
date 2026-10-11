@@ -46,6 +46,7 @@ function updateButtons() {
   const r = current(), errors = G.validateConfig(config());
   $('analyze').disabled = !r || r.points.length !== 4 || errors.length > 0 || !config().parts.some(p => p.count > 0) || loading;
   $('viewAnnotated').disabled = !r?.answers;
+  $('resetCorners').disabled = !r || loading; $('clearBatch').disabled = !records.length;
   $('export').disabled = !r?.answers || errors.length > 0;
   for (const id of ['exportExcel', 'exportSummaryPdf', 'exportAnnotatedPdf']) $(id).disabled = !records.length || !!errors.length || loading || exporting;
 }
@@ -135,7 +136,7 @@ function selectRecord(id) {
 $('recordSelect').onchange = () => selectRecord($('recordSelect').value);
 function draw() {
   const r = current(); canvas.classList.toggle('annotated', annotatedView);
-  $('viewAnnotated').textContent = annotatedView ? 'Xem ảnh gốc' : 'Xem bài đã đánh dấu';
+  window.ChamTNIcons.label($('viewAnnotated'), annotatedView ? 'Xem ảnh gốc' : 'Xem bài đã chấm', 'eye');
   if (!r) { canvas.style.display = 'none'; $('empty').style.display = 'block'; $('alignmentStatus').textContent = ''; $('cornerStatus').textContent = '0/4 góc đã chọn'; updateButtons(); return; }
   const image = annotatedView && r.answers ? Reports.annotatedCanvas(assess(r), config()) : r.source;
   canvas.width = image.width; canvas.height = image.height; ctx.drawImage(image, 0, 0);
@@ -286,7 +287,7 @@ async function scanCamera(version) {
 $('openCamera').onclick = async () => {
   stopCamera(); const version = cameraVersion;
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) { $('scanError').textContent = 'Camera trực tiếp cần HTTPS hoặc localhost. Trên điện thoại, bạn vẫn có thể chọn “Chụp bằng điện thoại”.'; $('scanError').scrollIntoView({ behavior: 'smooth' }); return; }
-  cameraPaused = false; cameraCount = 0; $('pauseCamera').textContent = 'Tạm dừng quét';
+  cameraPaused = false; cameraCount = 0; window.ChamTNIcons.label($('pauseCamera'), 'Tạm dừng quét', 'pause');
   $('cameraCount').textContent = '0 bài đã lưu'; $('cameraStatus').textContent = 'Đang mở camera…';
   $('cameraLast').textContent = 'Lấy đủ bốn mốc đen và giữ phiếu ổn định.';
   $('cameraProgress').style.width = '0%'; $('cameraPanel').classList.remove('hidden'); document.body.classList.add('camera-open'); $('closeCamera').focus();
@@ -299,11 +300,12 @@ $('openCamera').onclick = async () => {
     scanCamera(version);
   } catch (error) { if (version !== cameraVersion) return; stopCamera(); $('scanError').textContent = error.name === 'NotAllowedError' ? 'Chưa được cấp quyền camera. Cho phép camera trong trình duyệt hoặc dùng “Chụp bằng điện thoại”.' : 'Không mở được camera. Hãy dùng nút “Chụp bằng điện thoại” hoặc tải ảnh có sẵn.'; $('scanError').scrollIntoView({ behavior: 'smooth' }); }
 };
+$('scanCameraButton').onclick = () => $('openCamera').click();
 $('cameraVideo').onloadedmetadata = () => { $('captureCamera').disabled = !$('cameraVideo').videoWidth || cameraBusy; };
 $('closeCamera').onclick = stopCamera;
 $('pauseCamera').onclick = () => {
   cameraPaused = !cameraPaused; cameraGate.forgetCandidate();
-  $('pauseCamera').textContent = cameraPaused ? 'Tiếp tục quét' : 'Tạm dừng quét';
+  window.ChamTNIcons.label($('pauseCamera'), cameraPaused ? 'Tiếp tục quét' : 'Tạm dừng quét', cameraPaused ? 'play' : 'pause');
   $('cameraStatus').textContent = cameraPaused ? 'Đã tạm dừng tự quét. Có thể chụp thủ công.' : 'Đưa phiếu vào khung để tiếp tục.';
   $('cameraProgress').style.width = '0%';
 };

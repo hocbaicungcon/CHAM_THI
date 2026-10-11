@@ -11,6 +11,7 @@ test('local PDF page two reads the seven clearly filled true/false statements an
   const image=readPng(prefix+'-2.png'),aligned=O.autoAlign(image);
   assert.ok(aligned);assert.equal(aligned.profile,'youngmix');assert.ok(aligned.auxMarkers.length>=12);
   const result=O.recognize(image,aligned.points,aligned.profile);
+  assert.deepEqual(result.answers.p1.slice(0,4),['A','B','C','C']);
   assert.deepEqual(result.answers.p2[0],['Đ','S','','Đ']);
   assert.deepEqual(result.answers.p2[1],['Đ','S','S','S']);
   assert.deepEqual(result.flags.p2[1],['','','','']);

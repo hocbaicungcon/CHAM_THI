@@ -64,7 +64,7 @@
       const channel = c => (data[k+c]*(1-fx)+data[k+4+c]*fx)*(1-fy) +
         (data[k+width*4+c]*(1-fx)+data[k+width*4+4+c]*fx)*fy;
       const r = channel(0), g = channel(1), b = channel(2);
-      return { luminance: .2126 * r + .7152 * g + .0722 * b, excludedColor: r > g * 1.5 && r > b * 1.3 || g > r * 1.5 && g > b * 1.3 || r > 140 && g > 80 && b < g * .55 };
+      return { luminance: .2126 * r + .7152 * g + .0722 * b, excludedColor: r > g * 1.5 && r > b * 1.3 && b-g > 35 || r > 140 && g > 80 && b < g * .55 };
     };
     const measure = (x, y) => {
       // Estimate paper brightness around each bubble, outside its printed rim.

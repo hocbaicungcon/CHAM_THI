@@ -134,7 +134,12 @@
       const comma = commaResult.value ? Number(commaResult.value) : null;
       // Insert the separator before trimming unused physical digit columns.
       let raw = digits.map(value => value || ' ').join('');
-      if (comma !== null) raw = raw.slice(0, comma) + ',' + raw.slice(comma);
+      // A separator may occupy its own empty column; other missing digits
+      // remain ambiguous and must not silently become a shorter number.
+      if (comma !== null && digits[comma] === '' && digits[comma-1] && digits[comma+1]) {
+        raw = raw.slice(0, comma) + ',' + raw.slice(comma+1);
+      }
+      else if (comma !== null) raw = raw.slice(0, comma) + ',' + raw.slice(comma);
       const trimmed = raw.trim(), gap = /\s/.test(trimmed);
       let value = trimmed.replace(/\s/g, '');
       if (negative && value) value = '-' + value;

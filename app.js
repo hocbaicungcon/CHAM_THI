@@ -259,11 +259,13 @@ $('analyze').onclick = () => {
 };
 $('viewAnnotated').onclick = () => { annotatedView = !annotatedView; draw(); };
 function stopCamera() {
+  const wasOpen = !$('cameraPanel').classList.contains('hidden');
   cameraVersion++; clearTimeout(cameraTimer); cameraTimer = null;
   cameraStream?.getTracks().forEach(track => track.stop()); cameraStream = null;
   $('cameraVideo').srcObject = null; $('cameraPanel').classList.add('hidden'); $('captureCamera').disabled = true;
   $('cameraPanel').classList.remove('showing-preview'); document.body.classList.remove('camera-open'); drawCameraOverlay(null); cameraGate.reset(); cameraBusy = false; cameraAlignment = null;
   if (document.activeElement && $('cameraPanel').contains(document.activeElement)) $('openCamera').focus();
+  if (wasOpen && current()?.answers) { annotatedView = true; draw(); }
 }
 function cameraSource() {
   const video = $('cameraVideo'), stage = $('cameraOverlay').parentElement;

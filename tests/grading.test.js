@@ -9,6 +9,17 @@ function config(counts = [2, 1, 1]) {
 const answers = { p1: ['A', 'B', 'C'], p2: [['Đ', 'S', 'Đ', 'S']], p3: ['-1,20'] };
 const keys = G.parseKeys(['A B C', 'Đ S Đ S', '-1.2']);
 
+test('numeric separator can occupy an empty column but unrelated gaps require review', () => {
+  const marked = new Set(['126,1381', '186,1414', '156,1317']);
+  const dot = (x,y) => marked.has(`${x},${y}`) ? 1 : 0;
+  let result = OMR.read(dot);
+  assert.equal(result.answers.p3[0], '1,2');
+  assert.equal(result.flags.p3[0], '');
+  marked.delete('156,1317');
+  result = OMR.read(dot);
+  assert.ok(result.flags.p3[0]);
+});
+
 test('selected counts define denominators and ignore later answers', () => {
   const result = G.grade(answers, keys, config());
   assert.deepEqual(result.scores, [4, 4, 2]);

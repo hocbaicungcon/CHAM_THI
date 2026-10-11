@@ -44,9 +44,12 @@
   function detector(imageData, points) {
     const { data, width, height } = imageData, map = project(points);
     const sample = (x, y) => {
-      const point = map(x, y), ix = Math.round(point.x), iy = Math.round(point.y);
-      if (ix < 0 || iy < 0 || ix >= width || iy >= height) return null;
-      const k = (iy * width + ix) * 4, r = data[k], g = data[k + 1], b = data[k + 2];
+      const point = map(x, y), ix = Math.floor(point.x), iy = Math.floor(point.y);
+      if (ix < 0 || iy < 0 || ix >= width-1 || iy >= height-1) return null;
+      const fx = point.x-ix, fy = point.y-iy, k = (iy * width + ix) * 4;
+      const channel = c => (data[k+c]*(1-fx)+data[k+4+c]*fx)*(1-fy) +
+        (data[k+width*4+c]*(1-fx)+data[k+width*4+4+c]*fx)*fy;
+      const r = channel(0), g = channel(1), b = channel(2);
       return { luminance: .2126 * r + .7152 * g + .0722 * b, pink: r > g * 1.5 && r > b * 1.3 };
     };
     return (x, y) => {
@@ -61,13 +64,16 @@
       if (background.length < 12) return 0;
       background.sort((a, b) => a - b);
       const paper = background[Math.floor(background.length * .75)];
-      const threshold = Math.min(195, paper - Math.max(24, paper * .18));
+      // Soft local contrast retains faint graphite and defocused strokes.
+      // A dead band suppresses paper texture, sensor noise and light shadows.
+      const noise = Math.max(8, paper * .035);
+      const fullContrast = Math.max(24, paper * .18);
       let dark = 0, samples = 0;
       for (let dy = -5; dy <= 5; dy += 1.5) for (let dx = -5; dx <= 5; dx += 1.5) {
         if (dx * dx + dy * dy > 25) continue;
         const pixel = sample(x + dx, y + dy);
         if (!pixel) continue;
-        dark += pixel.luminance < threshold && !pixel.pink ? 1 : 0;
+        dark += pixel.pink ? 0 : Math.max(0, Math.min(1, (paper - pixel.luminance - noise) / (fullContrast - noise)));
         samples++;
       }
       return samples >= 24 ? dark / samples : 0;

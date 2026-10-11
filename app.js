@@ -150,6 +150,36 @@ function draw() {
   $('alignmentStatus').textContent = r.autoAligned ? 'Đã tự căn bằng mốc đen · ' + (r.profile === 'standard' ? 'Phiếu chuẩn PDF' : 'Phiếu YoungMix') : r.points.length === 4 ? 'Căn chỉnh thủ công' : 'Thiếu mốc: chọn bốn góc để chấm';
   updateButtons();
 }
+let scanAudio = null;
+$('scanSound').checked = stored('scanSound') !== 'off';
+$('scanSound').onchange = () => persist('scanSound', $('scanSound').checked ? 'on' : 'off');
+function unlockScanAudio() {
+  if (!$('scanSound').checked) return;
+  try {
+    const Audio = window.AudioContext || window.webkitAudioContext;
+    if (!Audio) return;
+    scanAudio ||= new Audio();
+    if (scanAudio.state === 'suspended') scanAudio.resume().catch(() => {});
+  } catch (_) { /* Camera and grading remain available without audio. */ }
+}
+document.addEventListener('pointerdown', unlockScanAudio, {passive:true});
+document.addEventListener('keydown', unlockScanAudio);
+function soundGraded() {
+  if (!$('scanSound').checked || scanAudio?.state !== 'running') return;
+  try {
+    const start = scanAudio.currentTime;
+    for (const [offset, frequency] of [[0,880],[.13,1174.66]]) {
+      const tone = scanAudio.createOscillator(), gain = scanAudio.createGain();
+      tone.type = 'sine'; tone.frequency.value = frequency;
+      gain.gain.setValueAtTime(0,start+offset);
+      gain.gain.linearRampToValueAtTime(.12,start+offset+.012);
+      gain.gain.exponentialRampToValueAtTime(.001,start+offset+.12);
+      tone.connect(gain); gain.connect(scanAudio.destination);
+      tone.start(start+offset); tone.stop(start+offset+.14);
+      tone.onended = () => { tone.disconnect(); gain.disconnect(); };
+    }
+  } catch (_) {}
+}
 function recognizeRecord(record) {
   const sourceCtx = record.source.getContext('2d', { willReadFrequently: true });
   const result = OMR.recognize(sourceCtx.getImageData(0, 0, record.source.width, record.source.height), record.points, record.profile);
@@ -164,7 +194,8 @@ async function addSource(source, label, activate = true, alignment = null) {
     record.points = aligned.points; record.profile = aligned.profile; record.autoAligned = true;
     try { recognizeRecord(record); } catch (error) { record.error = error.message; }
   }
-  records.push(record); if (activate || !activeId) selectRecord(record.id); else { renderPicker(); refresh(); }
+  records.push(record); if (assess(record).result?.scores && !record.error && !G.validateConfig(config()).length) soundGraded();
+  if (activate || !activeId) selectRecord(record.id); else { renderPicker(); refresh(); }
   await new Promise(resolve => setTimeout(resolve, 0));
   return record;
 }
@@ -206,7 +237,7 @@ canvas.onclick = event => {
 $('resetCorners').onclick = () => { const r = current(); if (!r) return; r.points = []; r.answers = null; r.flags = null; r.autoAligned = false; annotatedView = false; refresh(); draw(); };
 $('analyze').onclick = () => {
   const r = current(); if (!r) return;
-  try { recognizeRecord(r); selectRecord(r.id); }
+  try { recognizeRecord(r); selectRecord(r.id); if (assess(r).result?.scores) soundGraded(); }
   catch (error) { r.error = error.message; $('scanError').textContent = 'Không thể đọc phiếu: ' + error.message; }
 };
 $('viewAnnotated').onclick = () => { annotatedView = !annotatedView; draw(); };

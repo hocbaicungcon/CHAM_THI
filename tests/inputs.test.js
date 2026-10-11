@@ -172,3 +172,38 @@ test('camera alignment reads a tilted sheet on a cluttered desk at smaller scale
   const result=OMR.recognize(image,aligned.points,aligned.profile);assert.equal(result.answers.p1[0],'B');assert.equal(result.metadata.studentId,index?'00123457':'00123456');assert.equal(result.metadata.examCode,'0101');
  }
 });
+
+
+test('soft contrast reads very faint broad pencil strokes while ignoring sensor noise', () => {
+  const points = [{x:0,y:0},{x:1229,y:0},{x:1229,y:1754},{x:0,y:1754}];
+  for (const ink of [220, 230]) {
+    const image = markedSheet();
+    for (let k=0;k<image.data.length;k+=4) {
+      const v = image.data[k]===255 ? 250+(k%3) : ink;
+      image.data[k]=image.data[k+1]=image.data[k+2]=v;
+    }
+    const result=OMR.recognize(image,points);
+    assert.equal(result.answers.p1[0],'B', `Faint shade ${ink}`);
+    assert.equal(result.answers.p1[1],''); assert.equal(result.flags.p1[1],'Bỏ trống');
+    assert.equal(result.answers.p2[0][0],'Đ'); assert.equal(result.answers.p3[0],'2');
+  }
+});
+test('blurred low-contrast strokes remain readable with a subpixel alignment shift', () => {
+  const image=markedSheet(), x=182, y=644;
+  // Defocus spreads graphite smoothly over neighbouring pixels.
+  for(let dy=-12;dy<=12;dy++) for(let dx=-12;dx<=12;dx++) {
+    const v=Math.round(255-42*Math.exp(-(dx*dx+dy*dy)/55));
+    const k=((y+dy)*image.width+x+dx)*4;
+    image.data[k]=image.data[k+1]=image.data[k+2]=v;
+  }
+  const dot=OMR.detector(image,[{x:.65,y:.4},{x:1229.65,y:.4},{x:1229.65,y:1754.4},{x:.65,y:1754.4}]);
+  assert.equal(OMR.choose([133,182,231,280].map(px=>dot(px,644)),['A','B','C','D']).value,'B');
+});
+test('two very faint choices are flagged for review rather than accepted', () => {
+  const image=markedSheet();
+  for(const center of [133,182]) for(let y=638;y<=650;y++) for(let x=center-6;x<=center+6;x++) {
+    const k=(y*image.width+x)*4; image.data[k]=image.data[k+1]=image.data[k+2]=230;
+  }
+  const result=OMR.recognize(image,[{x:0,y:0},{x:1229,y:0},{x:1229,y:1754},{x:0,y:1754}]);
+  assert.equal(result.answers.p1[0],''); assert.equal(result.flags.p1[0],'Không rõ hoặc tô nhiều');
+});

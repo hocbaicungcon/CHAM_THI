@@ -109,3 +109,5 @@ button,.button{touch-action:manipulation}button:focus-visible,.button:focus-visi
 .preview-setting{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;color:#526a5c}.preview-setting span{white-space:nowrap}.preview-setting input{width:65px;padding:8px;border:1px solid #d9e4db;border-radius:8px;font:inherit}
 .camera-preview.expanded{inset:0;padding:calc(55px + env(safe-area-inset-top)) 6px calc(8px + env(safe-area-inset-bottom));width:auto;max-height:none;background:#081b16;box-sizing:border-box}
 .camera-panel.showing-preview .camera-top{z-index:4}.camera-panel.showing-preview .camera-bottom{visibility:hidden}
+
+.sound-setting{display:flex;align-items:center;gap:8px;font-size:12px;color:#526a5c;margin:0 0 14px}.sound-setting input{width:18px;height:18px;accent-color:#147d64}

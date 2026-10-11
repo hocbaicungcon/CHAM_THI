@@ -156,10 +156,10 @@ function recognizeRecord(record) {
   record.answers = result.answers; record.flags = result.flags; Object.assign(record, result.metadata); record.error = '';
   if (!record.manualKey) chooseKey(record);
 }
-async function addSource(source, label, activate = true) {
+async function addSource(source, label, activate = true, alignment = null) {
   const record = { id: String(++nextId), source, label, points: [], answers: null, flags: null, studentId: '', examCode: '', keyCode: preferredCode, autoAligned: false, error: '' };
   const pixels = source.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, source.width, source.height);
-  const aligned = OMR.autoAlign(pixels);
+  const aligned = alignment || OMR.autoAlign(pixels);
   if (aligned) {
     record.points = aligned.points; record.profile = aligned.profile; record.autoAligned = true;
     try { recognizeRecord(record); } catch (error) { record.error = error.message; }
@@ -217,6 +217,15 @@ function stopCamera() {
   document.body.classList.remove('camera-open'); drawCameraOverlay(null); cameraGate.reset(); cameraBusy = false;
   if (document.activeElement && $('cameraPanel').contains(document.activeElement)) $('openCamera').focus();
 }
+function cameraSource() {
+  const video = $('cameraVideo'), stage = $('cameraOverlay').parentElement;
+  const ratio = stage.clientWidth / stage.clientHeight;
+  const width = Math.min(video.videoWidth, video.videoHeight * ratio);
+  const height = width / ratio, scale = Math.min(1, 2560 / Math.max(width, height));
+  const source = document.createElement('canvas'); source.width = Math.round(width * scale); source.height = Math.round(height * scale);
+  source.getContext('2d').drawImage(video, (video.videoWidth-width)/2, (video.videoHeight-height)/2, width, height, 0, 0, source.width, source.height);
+  return source;
+}
 function cameraFrame(source) {
   const pixels = source.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, source.width, source.height);
   const aligned = OMR.autoAlign(pixels); if (!aligned) return null;
@@ -230,17 +239,20 @@ function cameraFrame(source) {
     (filled > 0 || !result.metadata.studentUncertain) && ambiguous <= Math.max(2, flags.length * .15);
   const identity = !result.metadata.studentUncertain && !result.metadata.examUncertain ? result.metadata.studentId + ':' + result.metadata.examCode : '';
   return { points: aligned.points, markers: aligned.markers, nearEnough, profile: aligned.profile, width: source.width, height: source.height, identity,
-    signature: JSON.stringify([result.metadata.studentId, result.metadata.examCode, answers]), usable };
+    signature: JSON.stringify([identity, answers]), usable };
 }
 async function saveCameraSource(source, frame, version) {
   cameraBusy = true; $('captureCamera').disabled = true;
   try {
-    const record = await addSource(source, `Camera · ${new Date().toLocaleTimeString('vi-VN')} · ${++cameraCount}`, true);
+    const record = await addSource(source, `Camera · ${new Date().toLocaleTimeString('vi-VN')} · ${++cameraCount}`, true, frame);
     if (version !== cameraVersion) return;
     if (frame) cameraGate.accept(frame, performance.now());
     const item = assess(record);
     $('cameraCount').textContent = `${cameraCount} bài đã lưu`;
     $('cameraLast').textContent = `${record.studentId ? 'SBD ' + record.studentId : 'Bài ' + cameraCount} · ${item.result?.scores ? format(item.result.total) + ' điểm' : 'Chưa tính điểm'} · ${item.status}`;
+    const preview = Reports.annotatedCanvas(item, config()), target = $('cameraPreviewCanvas');
+    target.width = preview.width; target.height = preview.height; target.getContext('2d').drawImage(preview, 0, 0);
+    $('cameraPreview').classList.remove('hidden');
     $('cameraStatus').textContent = 'Đã lưu bài. Thay phiếu tiếp theo.';
     $('cameraProgress').style.width = '0%';
     $('cameraFlash').classList.remove('flash'); void $('cameraFlash').offsetWidth; $('cameraFlash').classList.add('flash');
@@ -256,7 +268,7 @@ function drawCameraOverlay(frame) {
   const context = overlay.getContext('2d');
   $('cameraPanel').classList.toggle('has-sheet', !!frame);
   if (!frame) return;
-  const scale = Math.min(overlay.width / frame.width, overlay.height / frame.height);
+  const scale = Math.max(overlay.width / frame.width, overlay.height / frame.height);
   const left = (overlay.width - frame.width * scale) / 2, top = (overlay.height - frame.height * scale) / 2;
   const point = p => ({x:left+p.x*scale,y:top+p.y*scale});
   context.strokeStyle = frame.usable ? '#83f5a5' : '#ffcd6e'; context.fillStyle = '#83f5a533'; context.lineWidth = Math.max(2, overlay.width / 180);
@@ -273,7 +285,7 @@ async function scanCamera(version) {
   if (version !== cameraVersion || !cameraStream) return;
   try {
     if (!cameraPaused && !cameraBusy && $('cameraVideo').readyState >= 2) {
-      const source = Inputs.makeCanvas($('cameraVideo'), 1600, 2300), frame = cameraFrame(source);
+      const source = cameraSource(), frame = cameraFrame(source);
       drawCameraOverlay(frame);
       // A detected but unreadable sheet must not release the duplicate lock.
       const state = frame && !frame.usable ? (cameraGate.forgetCandidate(), {ready:false,reason:'quality'}) : cameraGate.observe(frame, performance.now());
@@ -287,13 +299,16 @@ async function scanCamera(version) {
 $('openCamera').onclick = async () => {
   stopCamera(); const version = cameraVersion;
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) { $('scanError').textContent = 'Camera trực tiếp cần HTTPS hoặc localhost. Trên điện thoại, bạn vẫn có thể chọn “Chụp bằng điện thoại”.'; $('scanError').scrollIntoView({ behavior: 'smooth' }); return; }
-  cameraPaused = false; cameraCount = 0; window.ChamTNIcons.label($('pauseCamera'), 'Tạm dừng quét', 'pause');
+  cameraPaused = false; cameraCount = 0; window.ChamTNIcons.label($('pauseCamera'), 'Tạm dừng', 'pause');
   $('cameraCount').textContent = '0 bài đã lưu'; $('cameraStatus').textContent = 'Đang mở camera…';
+  $('cameraPreview').classList.add('hidden'); $('cameraPreview').classList.remove('expanded');
   $('cameraLast').textContent = 'Lấy đủ bốn mốc đen và giữ phiếu ổn định.';
   $('cameraProgress').style.width = '0%'; $('cameraPanel').classList.remove('hidden'); document.body.classList.add('camera-open'); $('closeCamera').focus();
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 2560 } } });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 2560 }, height: { ideal: 1920 } } });
     if (version !== cameraVersion) { stream.getTracks().forEach(track => track.stop()); return; }
+    const track = stream.getVideoTracks()[0], capabilities = track.getCapabilities?.() || {};
+    if (capabilities.focusMode?.includes('continuous')) { try { await track.applyConstraints({advanced:[{focusMode:'continuous'}]}); } catch (_) {} }
     cameraStream = stream; $('cameraVideo').srcObject = stream; await $('cameraVideo').play();
     if (version !== cameraVersion) return;
     $('captureCamera').disabled = !$('cameraVideo').videoWidth; $('scanError').textContent = '';
@@ -303,23 +318,28 @@ $('openCamera').onclick = async () => {
 $('scanCameraButton').onclick = () => $('openCamera').click();
 $('cameraVideo').onloadedmetadata = () => { $('captureCamera').disabled = !$('cameraVideo').videoWidth || cameraBusy; };
 $('closeCamera').onclick = stopCamera;
+$('cameraPreviewToggle').onclick = () => {
+  const expanded = $('cameraPreview').classList.toggle('expanded');
+  if (expanded && !cameraPaused) $('pauseCamera').click();
+  $('cameraPreviewToggle').setAttribute('aria-expanded', String(expanded));
+};
 $('pauseCamera').onclick = () => {
   cameraPaused = !cameraPaused; cameraGate.forgetCandidate();
-  window.ChamTNIcons.label($('pauseCamera'), cameraPaused ? 'Tiếp tục quét' : 'Tạm dừng quét', cameraPaused ? 'play' : 'pause');
+  window.ChamTNIcons.label($('pauseCamera'), cameraPaused ? 'Tiếp tục' : 'Tạm dừng', cameraPaused ? 'play' : 'pause');
   $('cameraStatus').textContent = cameraPaused ? 'Đã tạm dừng tự quét. Có thể chụp thủ công.' : 'Đưa phiếu vào khung để tiếp tục.';
   $('cameraProgress').style.width = '0%';
 };
 $('captureCamera').onclick = async () => {
   if (!cameraStream || cameraBusy || !$('cameraVideo').videoWidth) return;
   const version = cameraVersion;
-  try { const source = Inputs.makeCanvas($('cameraVideo'), 1600, 2300); await saveCameraSource(source, cameraFrame(source), version); }
+  try { const source = cameraSource(); await saveCameraSource(source, cameraFrame(source), version); }
   catch (error) { if (version === cameraVersion) $('cameraStatus').textContent = error.message; }
 };
 document.addEventListener('keydown', event => {
   if (!$('cameraPanel').classList.contains('hidden')) {
     if (event.key === 'Escape') { event.preventDefault(); stopCamera(); }
     if (event.key === 'Tab') {
-      const controls = [$('closeCamera'), $('pauseCamera'), $('captureCamera')].filter(el => !el.disabled);
+      const controls = [$('closeCamera'), $('pauseCamera'), $('captureCamera'), ...(!$('cameraPreview').classList.contains('hidden') ? [$('cameraPreviewToggle')] : [])].filter(el => !el.disabled);
       const index = controls.indexOf(document.activeElement);
       if (event.shiftKey && index <= 0) { event.preventDefault(); controls.at(-1).focus(); }
       else if (!event.shiftKey && index === controls.length - 1) { event.preventDefault(); controls[0].focus(); }

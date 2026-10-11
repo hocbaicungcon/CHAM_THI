@@ -196,7 +196,14 @@
         try {
           for (const layout of layouts) {
           const map = project(rotated, layout.anchors);
-          const hits = layout.timing.reduce((sum, [x, y]) => { const p = map(x, y); return sum + (dark(p.x, p.y) ? 1 : 0); }, 0);
+          // Phone frames have blurred timing marks and subpixel projection errors.
+          // Search only within the inner quarter of a registration square.
+          const tolerance = Math.max(1, Math.min(...sizes) * .22);
+          const hits = layout.timing.reduce((sum, [x, y]) => {
+            const p = map(x, y);
+            const hit = [-1,0,1].some(dx => [-1,0,1].some(dy => dark(p.x + dx*tolerance, p.y + dy*tolerance)));
+            return sum + Number(hit);
+          }, 0);
           const score = hits / layout.timing.length + area / (width * height) * .02;
           if (hits >= 8 && hits / layout.timing.length >= .6 && (!best || score > best.score)) best = { score, profile:layout.profile, markers:rotated.map(p=>({x:p.x,y:p.y,size:p.size})), points: [[0, 0], [1229, 0], [1229, 1754], [0, 1754]].map(([x, y]) => map(x, y)), rotation };
           }

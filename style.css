@@ -87,3 +87,21 @@ button,.button{touch-action:manipulation}button:focus-visible,.button:focus-visi
 }
 @media(max-width:350px){.scan-actions,.scan-utilities{grid-template-columns:1fr}.scan-toolbar{gap:8px}.scan-toolbar .small{font-size:12px;padding:12px 8px}.scan .icon{width:18px;height:18px;flex-basis:18px}}
 [data-icon].hidden,[data-icon][hidden]{display:none}
+
+/* Camera uses the entire viewport; controls float above the live image. */
+.camera-stage{position:absolute;inset:0;display:block}
+.camera-panel .camera-stage video{object-fit:cover}
+.camera-top{position:absolute;inset:0 0 auto;z-index:2;padding:calc(8px + env(safe-area-inset-top)) 12px 8px;background:linear-gradient(#0009,transparent)}
+.camera-top b{font-size:14px}.camera-top small{font-size:11px}.camera-close{width:40px;height:40px}
+.camera-bottom{position:absolute;inset:auto 0 0;z-index:2;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,#000b 25%)}
+#cameraStatus{font-size:12px;margin-bottom:6px}.camera-progress{margin-bottom:6px}
+.camera-last{padding:0;border:0;background:none;font-size:11px;max-height:32px}.camera-tip{display:none}
+.camera-actions{display:flex;justify-content:center;gap:10px;margin-top:8px}.camera-actions button{min-height:40px;padding:8px 14px;font-size:12px;border-radius:20px}.camera-actions .icon{width:18px;height:18px;flex-basis:18px}
+.camera-guide{left:50%;top:50%;transform:translate(-50%,-50%);width:min(86vw,58dvh);max-height:76%;border-radius:8px}
+.camera-preview{position:absolute;right:12px;bottom:calc(148px + env(safe-area-inset-bottom));z-index:3;width:92px;max-height:160px}
+.camera-preview.hidden{display:none}.camera-preview button{display:block;width:100%;padding:3px;border:1px solid #b7ed9a;background:#102d25;color:white;border-radius:8px;cursor:pointer}
+.camera-preview canvas{display:block;width:100%;height:auto;max-height:130px;object-fit:contain;background:white}
+.camera-preview span{display:block;font-size:10px;padding:4px;line-height:1.3}
+.camera-preview.expanded{inset:calc(66px + env(safe-area-inset-top)) 12px calc(148px + env(safe-area-inset-bottom));width:auto;max-height:none;background:#081b16e8;display:flex;justify-content:center;align-items:center}
+.camera-preview.expanded button{width:auto;max-width:100%;height:100%}.camera-preview.expanded canvas{height:calc(100% - 30px);width:auto;max-width:100%;max-height:none}.camera-preview.expanded span{font-size:12px}
+@media(max-height:550px){.camera-preview{bottom:110px;width:66px}.camera-preview canvas{max-height:85px}.camera-preview.expanded{inset:54px 70px 100px;width:auto}}

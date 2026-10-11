@@ -2,6 +2,21 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const O=require('../js/omr'),readPng=require('./png-fixture');
 const source=path.resolve(__dirname,'../data/bai-lam-da-cham.pdf');
 const thirdSource=path.resolve(__dirname,'../data/bai-lam-da-cham 3.pdf');
+const fourthSource=path.resolve(__dirname,'../data/bai-lam-da-cham 4.pdf');
+test('local fourth PDF aligns despite its header and accepts the incomplete C fill',{skip:!fs.existsSync(fourthSource)},t=>{
+ if(spawnSync('pdftoppm',['-v']).error)return t.skip('Poppler unavailable');
+ const folder=fs.mkdtempSync(path.join(os.tmpdir(),'chamtn-fourth-'));
+ try{
+  const prefix=path.join(folder,'sheet');
+  const render=spawnSync('pdftoppm',['-f','1','-l','1','-scale-to','1754','-png',fourthSource,prefix]);
+  assert.equal(render.status,0,render.stderr?.toString());
+  const image=readPng(prefix+'-1.png'),aligned=O.autoAlign(image);
+  assert.ok(aligned);assert.equal(aligned.profile,'standard');assert.ok(aligned.auxMarkers.length>=20);
+  const result=O.recognize(image,aligned.points,aligned.profile);
+  assert.equal(result.answers.p1[2],'C');assert.equal(result.flags.p1[2],'');
+  assert.ok(result.answers.p1.slice(12).every(v=>!v));
+ }finally{fs.rmSync(folder,{recursive:true,force:true});}
+});
 test('local third PDF first paper reads question three and its separator column',{skip:!fs.existsSync(thirdSource)},t=>{
  if(spawnSync('pdftoppm',['-v']).error)return t.skip('Poppler unavailable');
  const folder=fs.mkdtempSync(path.join(os.tmpdir(),'chamtn-third-'));

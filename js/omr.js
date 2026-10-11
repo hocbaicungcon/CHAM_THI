@@ -92,10 +92,13 @@
       }
       if (samples < 24) return 0;
       // A printed rim or glyph darkens only part of an empty bubble.
-      // Broad graphite darkens even the brighter half of its inner disk.
+      // Combine broad fill with total ink coverage so uneven pencil is kept.
+      // The brighter half still dominates to suppress printed rims and glyphs.
       contrasts.sort((a,b)=>a-b);
       const inner = contrasts.slice(0, Math.ceil(contrasts.length*.5));
-      return inner.reduce((sum,v)=>sum+v,0)/inner.length;
+      const broad = inner.reduce((sum,v)=>sum+v,0)/inner.length;
+      const coverage = contrasts.reduce((sum,v)=>sum+v,0)/contrasts.length;
+      return broad*.7 + coverage*.3;
     };
     return measure;
   }
@@ -216,7 +219,8 @@
       const distance=p=>Math.hypot((p.x-targets[i][0])/width,(p.y-targets[i][1])/height);
       const outer=group.slice().sort((a,b)=>distance(a)-distance(b));
       const solid=group.slice().sort((a,b)=>(distance(a)-a.fill*.65)-(distance(b)-b.fill*.65));
-      const selected=[...new Set([...outer.slice(0,2),...solid.slice(0,4)])];
+      const large=group.filter(p=>p.fill>.6).sort((a,b)=>b.size-a.size);
+      const selected=[...new Set([...outer.slice(0,2),...solid.slice(0,4),...large.slice(0,2)])];
       group.splice(0,group.length,...selected);
     });
     const anchors = [[39, 31], [1196, 31], [1196, 1701], [39, 1701]];

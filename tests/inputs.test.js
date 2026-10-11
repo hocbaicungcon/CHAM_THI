@@ -131,6 +131,23 @@ test('uneven lighting across the sheet does not turn blank bubbles into answers'
   assert.equal(result.metadata.studentId,'00123456');
 });
 
+test('incomplete fills and a small spill outside the rim are accepted without marking adjacent blanks',()=>{
+ const png=require('./png-fixture'), image=png(path.join(__dirname,'../template/PHIEU_CHAM_TN.png'));
+ const aligned=OMR.autoAlign(image);assert.ok(aligned);
+ const map=OMR.project(aligned.points);
+ const fill=(x,y)=>{for(let dy=-7;dy<=7;dy++)for(let dx=-9;dx<=2;dx++){
+  if(dx*dx+dy*dy>81)continue;
+  const p=map(x+dx,y+dy),k=(Math.round(p.y)*image.width+Math.round(p.x))*4;
+  image.data[k]=image.data[k+1]=image.data[k+2]=45;
+ }};
+ fill(231,703);
+ let result=OMR.recognize(image,aligned.points,aligned.profile);
+ assert.equal(result.answers.p1[2],'C');assert.equal(result.flags.p1[2],'');
+ assert.ok(result.answers.p1.every((v,i)=>i===2||!v));
+ fill(182,703);
+ result=OMR.recognize(image,aligned.points,aligned.profile);
+ assert.equal(result.answers.p1[2],'');assert.equal(result.flags.p1[2],'Không rõ hoặc tô nhiều');
+});
 test('both actual blank sheet layouts align without reading printed outlines as answers',()=>{
  const png=require('./png-fixture');
  for(const [file,profile] of [['PHIEU_CHAM_TN.png','youngmix'],['PHIEU_TLTN_CHUAN.png','standard']]){

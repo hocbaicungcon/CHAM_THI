@@ -102,3 +102,6 @@ Web tự phân biệt mẫu ảnh YoungMix và `template/PHIEU TLTN CHUAN.pdf`, 
 ### Nút thao tác và icon
 
 Panel quét dùng nút thao tác cao tối thiểu 48px, nhóm nhập bài, đọc/xem bài và thao tác đặt lại/xóa riêng. Các nút chưa sử dụng được sẽ khóa khi danh sách trống. Nút tải file hỗ trợ bàn phím và chạm. Toàn bộ icon giao diện dùng SVG phẳng cục bộ trong một sprite, chia sẻ cả đường nét dấu đúng/sai cho ảnh/PDF bài chấm.
+
+### Đáp án phần I mở rộng
+Mỗi câu ngăn cách bằng dấu cách hoặc dấu phẩy. `AB`, `ABC` chấp nhận một trong các phương án ghi liền nhau; `O` chấp nhận A/B/C/D, `E` không chấp nhận phương án nào. Bỏ trống hoặc tô nhiều không được điểm với `O`. Excel nhập mỗi câu một ô. QR cũ giữ chuỗi một ký tự/câu; QR có đáp án mở rộng dùng `_` để phân tách câu, ví dụ `AB_ABC_O_E##`. Sửa đáp án cập nhật điểm và báo cáo của tất cả bài cùng mã đề. Vòng xanh: lựa chọn đúng; đỏ: lựa chọn sai; vàng: đáp án được chấp nhận khi chọn sai.

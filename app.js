@@ -6,6 +6,7 @@ const names = ['I', 'II', 'III'];
 const storedIds = ['key1', 'key2', 'key3', 'n1', 'n2', 'n3', 'w1', 'w2', 'w3', 'mode1', 'mode2', 'mode3', 'rule2', 'level1', 'level2', 'level3', 'level4', 'cameraPreviewSeconds'];
 let records = [], activeId = '', exams = [], preferredCode = '', nextId = 0, loadVersion = 0, importingVersion = 0;
 const cameraGate = new window.ChamTNScanner.ScanGate();
+let cameraPreviewRecord = null;
 let cameraTimer = null, cameraPaused = false, cameraBusy = false, cameraCount = 0;
 let loading = false, exporting = false, annotatedView = false, cameraStream = null, cameraVersion = 0;
 function stored(key) { try { return localStorage.getItem('chamtn:' + key); } catch (_) { return null; } }
@@ -55,7 +56,7 @@ function updateConfiguration() {
   $('configError').textContent = errors.join(' '); $('levels2').classList.toggle('hidden', cfg.rule2 !== 'levels');
   cfg.parts.forEach((part, i) => {
     const n = count(i); $('keyWrap' + (i + 1)).classList.toggle('hidden', n === 0);
-    $('keyLabel' + (i + 1)).textContent = `Phần ${names[i]} · ${n} ${i === 2 ? 'đáp án số' : 'câu'}` + (i === 0 ? ' A/B/C/D' : i === 1 ? ', mỗi câu 4 ý Đ/S' : '');
+    $('keyLabel' + (i + 1)).textContent = `Phần ${names[i]} · ${n} ${i === 2 ? 'đáp án số' : 'câu'}` + (i === 0 ? ' A–D / AB / ABC / O / E' : i === 1 ? ', mỗi câu 4 ý Đ/S' : '');
     let hint = errors.length ? 'Kiểm tra cấu hình đã nhập.' : !n ? 'Phần này không tính điểm.' : `${format(G.questionPoints(part), 5)} điểm ${i === 1 ? 'tối đa ' : ''}/ câu · Tổng ${format(G.maximum(part), 5)} điểm.`;
     if (!errors.length && n && i === 1 && cfg.rule2 === 'linear') hint += ` Mỗi ý đúng: ${format(G.questionPoints(part) / 4, 5)} điểm.`;
     $('hint' + (i + 1)).textContent = hint;
@@ -281,6 +282,7 @@ async function saveCameraSource(source, frame, version) {
     const item = assess(record);
     $('cameraCount').textContent = `${cameraCount} bài đã lưu`;
     $('cameraLast').textContent = `${record.studentId ? 'SBD ' + record.studentId : 'Bài ' + cameraCount} · ${item.result?.scores ? format(item.result.total) + ' điểm' : 'Chưa tính điểm'} · ${item.status}`;
+    cameraPreviewRecord = record;
     const preview = Reports.annotatedCanvas(item, config()), target = $('cameraPreviewCanvas');
     target.width = preview.width; target.height = preview.height; target.getContext('2d').drawImage(preview, 0, 0);
     $('cameraPreview').classList.remove('hidden'); $('cameraPreview').classList.add('expanded');
@@ -326,10 +328,10 @@ async function scanCamera(version) {
       const source = cameraSource(), frame = cameraFrame(source);
       drawCameraOverlay(frame);
       // A detected but unreadable sheet must not release the duplicate lock.
-      const state = frame && !frame.usable ? (cameraGate.forgetCandidate(), {ready:false,reason:'quality'}) : cameraGate.observe(frame, performance.now());
+      const state = frame && !frame.usable ? cameraGate.hold(performance.now()) : cameraGate.observe(frame, performance.now());
       $('cameraProgress').style.width = `${Math.round((state.progress || 0) * 100)}%`;
       if (state.ready) await saveCameraSource(source, frame, version);
-      else $('cameraStatus').textContent = state.reason === 'missing' ? 'Đưa đủ bốn mốc đen vào khung.' : state.reason === 'duplicate' ? 'Bài này đã lưu. Thay phiếu tiếp theo.' : state.reason === 'quality' ? !frame?.nearEnough ? 'Đưa máy gần phiếu hơn để đọc rõ các ô.' : 'Làm rõ nét tô và kiểm tra cấu hình, hoặc chụp thủ công.' : 'Giữ phiếu ổn định…';
+      else $('cameraStatus').textContent = state.reason === 'missing' ? 'Đưa đủ bốn mốc đen vào khung.' : state.reason === 'duplicate' ? 'Bài này đã lưu. Thay phiếu tiếp theo.' : state.reason === 'quality' ? !frame?.nearEnough ? 'Đưa máy gần phiếu hơn để đọc rõ các ô.' : 'Làm rõ nét tô và kiểm tra cấu hình, hoặc chụp thủ công.' : 'Giữ phiếu trong khung, rung nhẹ vẫn quét được…';
     }
   } catch (error) { if (version === cameraVersion) $('cameraStatus').textContent = 'Không đọc được khung hình. Giữ máy ổn định hoặc chụp thủ công.'; }
   finally { if (version === cameraVersion && cameraStream) cameraTimer = setTimeout(() => scanCamera(version), 450); }
@@ -438,10 +440,14 @@ function refresh() {
     }
     document.querySelectorAll('.answer-item').forEach(element => {
       const p = element.dataset.part, i = Number(element.dataset.index), j = Number(element.dataset.sub), key = p === 'p2' ? item.keys[p][i]?.[j] : item.keys[p][i], value = p === 'p2' ? r.answers[p][i][j] : r.answers[p][i];
-      element.classList.remove('correct', 'wrong'); if (G.validKey(p, key)) element.classList.add(p === 'p3' ? (G.sameNumber(value, key) ? 'correct' : 'wrong') : value === key ? 'correct' : 'wrong');
+      element.classList.remove('correct', 'wrong'); if (G.validKey(p, key)) element.classList.add(G.isCorrect(p, value, key) ? 'correct' : 'wrong');
     });
   }
   updateButtons(); if (annotatedView) draw();
+  if (cameraPreviewRecord && records.includes(cameraPreviewRecord) && !$('cameraPreview').classList.contains('hidden')) {
+    const preview = Reports.annotatedCanvas(assess(cameraPreviewRecord), config()), target = $('cameraPreviewCanvas');
+    target.width=preview.width; target.height=preview.height; target.getContext('2d').drawImage(preview,0,0);
+  }
 }
 function download(data, filename, type) {
   const url = URL.createObjectURL(new Blob([data], { type })), link = document.createElement('a'); link.href = url; link.download = filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);

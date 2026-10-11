@@ -91,3 +91,25 @@ test('local OMR measures marks from pixel data without a network dependency', ()
   assert.equal(result.answers.p1[0], 'B');
   assert.equal(result.answers.p1[1], '');
 });
+
+
+test('multiple accepted choices, O and E use the same rule for every single selection', () => {
+  for (const key of ['AB','ABC','O','E']) for(const choice of ['A','B','C','D','', 'AB']) {
+    const expected=['A','B','C','D'].includes(choice) && (key==='O' || key!=='E' && key.includes(choice));
+    assert.equal(G.isCorrect('p1',choice,key),expected,`${key} / ${choice}`);
+    const result=G.grade({p1:[choice],p2:[],p3:[]},{p1:[key],p2:[],p3:[]},config([1,0,0]));
+    assert.equal(result.total, expected?4:0); assert.deepEqual(result.warnings,[]);
+  }
+  for(const key of ['AA','AO','A B','AX','',null]) assert.equal(G.validKey('p1',key),false);
+  assert.deepEqual(G.parseKeys(['AB ABC O E','','']).p1,['AB','ABC','O','E']);
+});
+test('editing a shared key recalculates all papers and detailed report correctness', () => {
+  const Reports=require('../js/reports.js'), cfg=config([1,0,0]);
+  const shared={p1:['A'],p2:[],p3:[]};
+  const papers=['B','D'].map(value=>({label:'Test',answers:{p1:[value],p2:[],p3:[]},flags:{p1:[''],p2:[],p3:[]}}));
+  assert.deepEqual(papers.map(r=>G.grade(r.answers,shared,cfg).total),[0,0]);
+  shared.p1[0]='BD';
+  const items=papers.map(record=>({record,keys:shared,result:G.grade(record.answers,shared,cfg)}));
+  assert.deepEqual(items.map(item=>item.result.total),[4,4]);
+  assert.deepEqual(Reports.detailRows(items,cfg).slice(1).map(row=>row[7]),['Đúng','Đúng']);
+});

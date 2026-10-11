@@ -207,3 +207,12 @@ test('two very faint choices are flagged for review rather than accepted', () =>
   const result=OMR.recognize(image,[{x:0,y:0},{x:1229,y:0},{x:1229,y:1754},{x:0,y:1754}]);
   assert.equal(result.answers.p1[0],''); assert.equal(result.flags.p1[0],'Không rõ hoặc tô nhiều');
 });
+
+
+test('Excel cells and delimited QR keys accept alternative choices and O/E',()=>{
+  assert.doesNotThrow(()=>Inputs.validateExam({code:'101',keys:{p1:['AB','ABC','O','E'],p2:[],p3:[]}}));
+  const bank=Inputs.parseQrPayload(JSON.stringify({'101':'AB_ABC_O_E##'}));
+  assert.deepEqual(bank[0].keys.p1,['AB','ABC','O','E']);
+  assert.deepEqual(Inputs.parseQrPayload(JSON.stringify({'101':'ABCD##'}))[0].keys.p1,['A','B','C','D']);
+  assert.throws(()=>Inputs.validateExam({code:'101',keys:{p1:['AA'],p2:[],p3:[]}}));
+});

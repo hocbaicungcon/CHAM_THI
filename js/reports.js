@@ -22,7 +22,7 @@
           const value = part === 1 ? r.answers[p][i][j] : r.answers[p][i];
           const key = part === 1 ? item.keys[p][i]?.[j] : item.keys[p][i];
           const flag = part === 1 ? r.flags[p][i][j] : r.flags[p][i];
-          const valid = G.validKey(p, key), correct = p === 'p3' ? G.sameNumber(value, key) : value === key;
+          const valid = G.validKey(p, key), correct = G.isCorrect(p, value, key);
           rows.push([r.label, r.studentId || '', r.keyCode || '', ['I', 'II', 'III'][part], `${i + 1}${part === 1 ? 'abcd'[j] : ''}`, value, key ?? '', valid ? (correct ? 'Đúng' : 'Sai') : 'Thiếu đáp án', flag]);
         }
       }
@@ -92,8 +92,8 @@
     return pages;
   }
   function mark(ctx, position, correct, dashed = false) {
-    ctx.save(); ctx.strokeStyle = correct ? '#078735' : '#df202b'; ctx.lineWidth = 5;
-    if (dashed) ctx.setLineDash([4, 3]);
+    ctx.save(); ctx.strokeStyle = dashed ? '#d99a00' : correct ? '#078735' : '#df202b'; ctx.lineWidth = 5;
+    if (dashed) ctx.setLineDash([]);
     ctx.beginPath(); ctx.arc(position.x, position.y, 12, 0, Math.PI * 2); ctx.stroke();
     if (!dashed) {
       ctx.setLineDash([]);
@@ -117,12 +117,13 @@
       for (let i = 0; i < config.parts[part].count; i++) for (let j = 0; j < (part === 1 ? 4 : 1); j++) {
         const key = part === 1 ? item.keys[p][i]?.[j] : item.keys[p][i], value = part === 1 ? r.answers[p][i][j] : r.answers[p][i];
         if (!G.validKey(p, key)) continue;
-        const correct = p === 'p3' ? G.sameNumber(value, key) : value === key;
+        const correct = G.isCorrect(p, value, key);
         if (part < 2) {
-          if (G.validKey(p, value)) mark(sheetCtx, O.choicePosition(p, i, j, value, r.profile), correct);
+          if ((p === 'p1' ? ['A','B','C','D'].includes(value) : G.validKey(p, value))) mark(sheetCtx, O.choicePosition(p, i, j, value, r.profile), correct);
           if (!correct) {
-            const pos = O.choicePosition(p, i, j, key, r.profile); mark(sheetCtx, pos, true, true);
-            if (!value) { root.ChamTNIcons.draw(sheetCtx, 'close', pos.x - 24, pos.y - 26, 18, '#df202b'); }
+            for (const accepted of p === 'p1' ? G.acceptedChoices(key) : [key]) {
+              const pos = O.choicePosition(p, i, j, accepted, r.profile); mark(sheetCtx, pos, true, true);
+            }
           }
         } else {
           const standard = r.profile === 'standard';
@@ -160,7 +161,7 @@
       text(ctx, `${item.result.warnings.length ? 'Điểm tạm tính' : 'Tổng điểm'}: ${fmt(item.result.total)}/${fmt(item.result.maxima.reduce((sum, v) => sum + v, 0))}`, 28, 112, 31, '#147d64', true);
       text(ctx, `Phần I: ${fmt(item.result.scores[0])}/${fmt(item.result.maxima[0])}    Phần II: ${fmt(item.result.scores[1])}/${fmt(item.result.maxima[1])}    Phần III: ${fmt(item.result.scores[2])}/${fmt(item.result.maxima[2])}`, 465, 109, 23);
     } else fitted(ctx, item.status, 28, 111, 1170, 28, '#bb3434');
-    text(ctx, 'Vòng xanh: đúng · Vòng đỏ: sai · Vòng xanh nét đứt: đáp án chuẩn', 28, 148, 21);
+    text(ctx, 'Vòng xanh: đúng · Vòng đỏ: sai · Vòng vàng: đáp án đúng', 28, 148, 21);
     fitted(ctx, item.status, 28, 174, 1170, 17, '#7a6843');
     return canvas;
   }

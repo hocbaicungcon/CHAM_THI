@@ -47,9 +47,18 @@
     return left !== null && right !== null && left === right;
   }
   function validKey(part, value) {
-    if (part === 'p1') return ['A', 'B', 'C', 'D'].includes(value);
+    if (part === 'p1') return typeof value === 'string' && (/^[OE]$/.test(value) || /^[ABCD]{1,4}$/.test(value) && new Set(value).size === value.length);
     if (part === 'p2') return ['Đ', 'S'].includes(value);
     return numeric(value) !== null;
+  }
+  function acceptedChoices(key) {
+    if (!validKey('p1', key) || key === 'E') return [];
+    return key === 'O' ? ['A','B','C','D'] : key.split('');
+  }
+  function isCorrect(part, value, key) {
+    if (!validKey(part,key)) return false;
+    if (part === 'p1') return ['A','B','C','D'].includes(value) && acceptedChoices(key).includes(value);
+    return part === 'p3' ? sameNumber(value,key) : value === key;
   }
   function grade(answers, keys, config) {
     const configErrors = validateConfig(config);
@@ -57,8 +66,8 @@
     const scores = [0, 0, 0], warnings = [];
     const [first, second, third] = config.parts;
     for (let i = 0; i < first.count; i++) {
-      if (!validKey('p1', keys.p1[i])) warnings.push(`Phần I câu ${i + 1}: thiếu đáp án A/B/C/D hợp lệ.`);
-      else if (answers.p1[i] === keys.p1[i]) scores[0] += questionPoints(first);
+      if (!validKey('p1', keys.p1[i])) warnings.push(`Phần I câu ${i + 1}: cần đáp án A–D, tổ hợp như AB/ABC, O hoặc E hợp lệ.`);
+      else if (isCorrect('p1', answers.p1[i], keys.p1[i])) scores[0] += questionPoints(first);
     }
     for (let i = 0; i < second.count; i++) {
       const key = keys.p2[i];
@@ -78,5 +87,5 @@
     }
     return { configErrors, warnings, scores, maxima: config.parts.map(maximum), total: scores.reduce((sum, v) => sum + v, 0) };
   }
-  return { limits, validateConfig, maximum, questionPoints, parseKeys, numeric, sameNumber, validKey, grade };
+  return { limits, validateConfig, maximum, questionPoints, parseKeys, numeric, sameNumber, validKey, acceptedChoices, isCorrect, grade };
 });

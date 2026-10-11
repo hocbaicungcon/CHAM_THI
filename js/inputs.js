@@ -12,7 +12,7 @@
   function validateExam(exam) {
     const { p1, p2, p3 } = exam.keys;
     if (p1.length > 40 || p2.length > 8 || p3.length > 6 || !p1.length && !p2.length && !p3.length) throw new Error(`Mã đề ${exam.code}: số câu không phù hợp với mẫu phiếu.`);
-    if (p1.some(v => !['A', 'B', 'C', 'D'].includes(v))) throw new Error(`Mã đề ${exam.code}: phần I có đáp án trống hoặc không hợp lệ.`);
+    if (p1.some(v => typeof v !== 'string' || !(/^[OE]$/.test(v) || /^[ABCD]{1,4}$/.test(v) && new Set(v).size === v.length))) throw new Error(`Mã đề ${exam.code}: phần I có đáp án trống hoặc không hợp lệ.`);
     if (p2.some(row => row.length !== 4 || row.some(v => !['Đ', 'S'].includes(v)))) throw new Error(`Mã đề ${exam.code}: mỗi câu phần II cần đủ 4 ý Đ/S.`);
     if (p3.some(v => !/^-?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(String(v)))) throw new Error(`Mã đề ${exam.code}: phần III có đáp án số không hợp lệ.`);
     return exam;
@@ -26,7 +26,7 @@
       if (typeof content !== 'string') throw new Error(`Đáp án mã đề ${code} không hợp lệ.`);
       const parts = content.split('#'); if (parts.length !== 3) throw new Error(`Mã đề ${code}: cần đủ ba phần, ngăn cách bằng #.`);
       exams.push(validateExam({ code, keys: {
-        p1: parts[0].toUpperCase().replace(/\s/g, '').split(''),
+        p1: (/[\s_,;]/.test(parts[0].trim()) ? parts[0].toUpperCase().trim().split(/[\s_,;]+/).filter(Boolean) : parts[0].toUpperCase().split('')),
         p2: parts[1] ? parts[1].split('_').map(row => row.toUpperCase().replace(/D/g, 'Đ').split('')) : [],
         p3: parts[2] ? parts[2].split('_').map(v => v.trim()) : []
       } }));

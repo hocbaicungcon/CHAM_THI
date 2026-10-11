@@ -12,9 +12,9 @@
   function validateExam(exam) {
     const { p1, p2, p3 } = exam.keys;
     if (p1.length > 40 || p2.length > 8 || p3.length > 6 || !p1.length && !p2.length && !p3.length) throw new Error(`Mã đề ${exam.code}: số câu không phù hợp với mẫu phiếu.`);
-    if (p1.some(v => typeof v !== 'string' || !(/^[OE]$/.test(v) || /^[ABCD]{1,4}$/.test(v) && new Set(v).size === v.length))) throw new Error(`Mã đề ${exam.code}: phần I có đáp án trống hoặc không hợp lệ.`);
-    if (p2.some(row => row.length !== 4 || row.some(v => !['Đ', 'S'].includes(v)))) throw new Error(`Mã đề ${exam.code}: mỗi câu phần II cần đủ 4 ý Đ/S.`);
-    if (p3.some(v => !/^-?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(String(v)))) throw new Error(`Mã đề ${exam.code}: phần III có đáp án số không hợp lệ.`);
+    if (p1.some(v => typeof v !== 'string' || !(/^[OX]$/.test(v) || /^[ABCD]{1,4}$/.test(v) && new Set(v).size === v.length))) throw new Error(`Mã đề ${exam.code}: phần I có đáp án trống hoặc không hợp lệ.`);
+    if (p2.some(row => row.length !== 4 || row.some(v => !['Đ', 'S', 'O', 'X'].includes(v)))) throw new Error(`Mã đề ${exam.code}: mỗi câu phần II cần đủ 4 ý Đ/S/O/X.`);
+    if (p3.some(v => !['O','X'].includes(v) && !/^-?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(String(v)))) throw new Error(`Mã đề ${exam.code}: phần III cần đáp án số, O hoặc X.`);
     return exam;
   }
   function parseQrPayload(payload) {

@@ -6,16 +6,16 @@ const names = ['I', 'II', 'III'];
 const storedIds = ['key1', 'key2', 'key3', 'n1', 'n2', 'n3', 'w1', 'w2', 'w3', 'mode1', 'mode2', 'mode3', 'rule2', 'level1', 'level2', 'level3', 'level4', 'cameraPreviewSeconds'];
 let records = [], activeId = '', exams = [], preferredCode = '', nextId = 0, loadVersion = 0, importingVersion = 0;
 const cameraGate = new window.ChamTNScanner.ScanGate();
-let cameraPreviewRecord = null;
+let cameraPreviewRecord = null, cameraAlignment = null;
 let cameraTimer = null, cameraPaused = false, cameraBusy = false, cameraCount = 0;
 let loading = false, exporting = false, annotatedView = false, cameraStream = null, cameraVersion = 0;
 function stored(key) { try { return localStorage.getItem('chamtn:' + key); } catch (_) { return null; } }
 function persist(key, value) { try { localStorage.setItem('chamtn:' + key, value); } catch (_) {} }
 function save(id) { persist(id, $(id).value); }
-for (const id of storedIds) { const value = stored(id); if (value !== null) $(id).value = value; }
+for (const id of storedIds) { let value = stored(id); if (id === 'key1' && value !== null) { value = value.replace(/\bE\b/g,'X'); persist(id,value); } if (value !== null) $(id).value = value; }
 try {
   const bank = JSON.parse(stored('exams') || '[]');
-  if (Array.isArray(bank) && bank.every(exam => /^\d{1,4}$/.test(exam.code) && ['p1', 'p2', 'p3'].every(p => Array.isArray(exam.keys[p])))) exams = bank;
+  if (Array.isArray(bank) && bank.every(exam => /^\d{1,4}$/.test(exam.code) && ['p1', 'p2', 'p3'].every(p => Array.isArray(exam.keys[p])))) exams = bank; for (const exam of exams) exam.keys.p1 = exam.keys.p1.map(v => v === 'E' ? 'X' : v); persist('exams',JSON.stringify(exams));
 } catch (_) {}
 preferredCode = Inputs.matchingCode(exams, stored('preferredCode') || '') || (exams.find(e => e.code === '000') || exams[0])?.code || '';
 const previousModes = [1, 2, 3].map(i => $('mode' + i).value);
@@ -31,7 +31,7 @@ function keysFor(record) { return exams.length ? exams.find(exam => exam.code ==
 function count(i) { const value = number('n' + (i + 1)); return Number.isInteger(value) && value >= 0 && value <= G.limits[i] ? value : 0; }
 function checkCount(record) {
   if (!record.answers) return 0;
-  return record.flags.p1.slice(0, count(0)).filter(Boolean).length + record.flags.p2.slice(0, count(1)).flat().filter(Boolean).length + record.flags.p3.slice(0, count(2)).filter(Boolean).length;
+  return record.flags.p1.slice(0, count(0)).filter((flag,i) => flag && !G.ignored('p1',keysFor(record).p1[i])).length + record.flags.p2.slice(0, count(1)).reduce((sum,row,i) => sum + row.filter((flag,j) => flag && !G.ignored('p2',keysFor(record).p2[i]?.[j])).length, 0) + record.flags.p3.slice(0, count(2)).filter((flag,i) => flag && !G.ignored('p3',keysFor(record).p3[i])).length;
 }
 function assess(record) {
   const recordKeys = keysFor(record);
@@ -56,7 +56,7 @@ function updateConfiguration() {
   $('configError').textContent = errors.join(' '); $('levels2').classList.toggle('hidden', cfg.rule2 !== 'levels');
   cfg.parts.forEach((part, i) => {
     const n = count(i); $('keyWrap' + (i + 1)).classList.toggle('hidden', n === 0);
-    $('keyLabel' + (i + 1)).textContent = `Phần ${names[i]} · ${n} ${i === 2 ? 'đáp án số' : 'câu'}` + (i === 0 ? ' A–D / AB / ABC / O / E' : i === 1 ? ', mỗi câu 4 ý Đ/S' : '');
+    $('keyLabel' + (i + 1)).textContent = `Phần ${names[i]} · ${n} ${i === 2 ? 'đáp án số' : 'câu'}` + (i === 0 ? ' A–D / AB / ABC / O / X' : i === 1 ? ', mỗi câu 4 ý Đ/S/O/X' : '');
     let hint = errors.length ? 'Kiểm tra cấu hình đã nhập.' : !n ? 'Phần này không tính điểm.' : `${format(G.questionPoints(part), 5)} điểm ${i === 1 ? 'tối đa ' : ''}/ câu · Tổng ${format(G.maximum(part), 5)} điểm.`;
     if (!errors.length && n && i === 1 && cfg.rule2 === 'linear') hint += ` Mỗi ý đúng: ${format(G.questionPoints(part) / 4, 5)} điểm.`;
     $('hint' + (i + 1)).textContent = hint;
@@ -72,8 +72,8 @@ for (const id of storedIds) $(id).addEventListener('input', () => {
   }
   save(id);
   if (id.startsWith('key')) {
-    const code = current()?.keyCode || preferredCode, exam = exams.find(e => e.code === code);
-    if (exam) { exam.keys = keys(); persist('exams', JSON.stringify(exams)); }
+    const code = $('examSelect').value || preferredCode, draftCode = Inputs.matchingCode(exams,$('manualCode').value.trim()) || $('manualCode').value.trim().padStart(3,'0'), exam = exams.find(e => e.code === code);
+    if (exam && (! $('manualCode').value.trim() || draftCode === code)) { exam.keys = keys(); persist('exams', JSON.stringify(exams)); }
     refresh();
   } else updateConfiguration();
 });
@@ -84,7 +84,8 @@ function renderExamPicker() {
 }
 function showKeys(code) {
   if (!exams.length) { $('examInfo').textContent = ''; return; }
-  const exam = exams.find(e => e.code === code); $('examSelect').value = exam?.code || '';
+  const exam = exams.find(e => e.code === code); $('examSelect').value = exam?.code || ''; $('manualCode').value = exam?.code || '';
+  $('manualKeyStatus').textContent='Sửa đáp án mã đề đang chọn sẽ tự cập nhật toàn bộ bài cùng mã đề. Đổi mã rồi bấm lưu để thêm mã đề mới.';
   for (let i = 0; i < 3; i++) {
     const p = 'p' + (i + 1), values = exam?.keys[p] || [];
     $('key' + (i + 1)).value = i === 0 ? values.join(' ') : i === 1 ? values.map(row => row.join(' ')).join('\n') : values.join('\n');
@@ -120,6 +121,21 @@ async function importKeys(file, type) {
     $('importStatus').textContent = `Đã nhập ${bank.length} mã đề từ ${file.name}. Số câu đã cập nhật theo đáp án mẫu; thang điểm giữ theo cấu hình của bạn.`;
   } catch (error) { if (version === importingVersion) { $('importStatus').classList.add('error'); $('importStatus').textContent = error.message; } }
 }
+$('saveManualKey').onclick = () => {
+  const raw = $('manualCode').value.trim();
+  if(!/^\d{1,4}$/.test(raw)){ $('manualKeyStatus').textContent='Mã đề cần từ 1 đến 4 chữ số.'; return; }
+  const code=Inputs.matchingCode(exams,raw) || raw.padStart(3,'0'), bankKeys=keys();
+  try { Inputs.validateExam({code,keys:bankKeys}); }
+  catch(error){$('manualKeyStatus').textContent=error.message;return;}
+  const existing=exams.find(e=>e.code===code), firstBank=!exams.length;
+  if(existing)existing.keys=bankKeys;else exams.push({code,keys:bankKeys});
+  preferredCode=code;persist('exams',JSON.stringify(exams));persist('preferredCode',code);
+  renderExamPicker();
+  records.forEach(record=>{ if(firstBank || !record.manualKey)chooseKey(record); });
+  for(let i=0;i<3;i++){ $('n'+(i+1)).value=bankKeys['p'+(i+1)].length;save('n'+(i+1)); }
+  showKeys(code);updateConfiguration();
+  $('manualKeyStatus').textContent=`Đã lưu mã đề ${code}. Đã cập nhật điểm các bài dùng mã đề này.`;
+};
 $('excelKey').onchange = event => { importKeys(event.target.files[0], 'excel'); event.target.value = ''; };
 $('qrKey').onchange = event => { importKeys(event.target.files[0], 'qr'); event.target.value = ''; };
 function renderPicker() {
@@ -246,7 +262,7 @@ function stopCamera() {
   cameraVersion++; clearTimeout(cameraTimer); cameraTimer = null;
   cameraStream?.getTracks().forEach(track => track.stop()); cameraStream = null;
   $('cameraVideo').srcObject = null; $('cameraPanel').classList.add('hidden'); $('captureCamera').disabled = true;
-  $('cameraPanel').classList.remove('showing-preview'); document.body.classList.remove('camera-open'); drawCameraOverlay(null); cameraGate.reset(); cameraBusy = false;
+  $('cameraPanel').classList.remove('showing-preview'); document.body.classList.remove('camera-open'); drawCameraOverlay(null); cameraGate.reset(); cameraBusy = false; cameraAlignment = null;
   if (document.activeElement && $('cameraPanel').contains(document.activeElement)) $('openCamera').focus();
 }
 function cameraSource() {
@@ -260,17 +276,19 @@ function cameraSource() {
 }
 function cameraFrame(source) {
   const pixels = source.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, source.width, source.height);
-  const aligned = OMR.autoAlign(pixels); if (!aligned) return null;
+  const aligned = OMR.autoAlign(pixels, cameraAlignment?.width===source.width && cameraAlignment?.height===source.height ? cameraAlignment : null); if (!aligned) return null;
+  cameraAlignment = {...aligned,width:source.width,height:source.height};
   const result = OMR.recognize(pixels, aligned.points, aligned.profile), cfg = config();
   const answers = [result.answers.p1.slice(0, count(0)), result.answers.p2.slice(0, count(1)), result.answers.p3.slice(0, count(2))];
-  const flags = [result.flags.p1.slice(0, count(0)), result.flags.p2.slice(0, count(1)).flat(), result.flags.p3.slice(0, count(2))].flat();
+  const cameraKeys = exams.length ? (exams.find(exam => exam.code === (Inputs.matchingCode(exams, result.metadata.examCode) || preferredCode))?.keys || emptyKeys()) : keys();
+  const flags = [result.flags.p1.slice(0, count(0)).filter((_,i) => !G.ignored('p1',cameraKeys.p1[i])), result.flags.p2.slice(0, count(1)).flatMap((row,i) => row.filter((_,j) => !G.ignored('p2',cameraKeys.p2[i]?.[j]))), result.flags.p3.slice(0, count(2)).filter((_,i) => !G.ignored('p3',cameraKeys.p3[i]))].flat();
   const filled = answers.flat(2).filter(Boolean).length;
   const ambiguous = flags.filter(flag => /không rõ|Không rõ/.test(flag)).length;
   const nearEnough = Math.min(...aligned.markers.map((m,i) => Math.hypot(m.x-aligned.markers[(i+1)%4].x,m.y-aligned.markers[(i+1)%4].y))) >= 420;
   const usable = nearEnough && !G.validateConfig(cfg).length && cfg.parts.some(p => p.count > 0) &&
     (filled > 0 || !result.metadata.studentUncertain) && ambiguous <= Math.max(2, flags.length * .15);
   const identity = !result.metadata.studentUncertain && !result.metadata.examUncertain ? result.metadata.studentId + ':' + result.metadata.examCode : '';
-  return { points: aligned.points, markers: aligned.markers, nearEnough, profile: aligned.profile, width: source.width, height: source.height, identity,
+  return { points: aligned.points, markers: aligned.markers, auxMarkers: aligned.auxMarkers, nearEnough, profile: aligned.profile, width: source.width, height: source.height, identity,
     signature: JSON.stringify([identity, answers]), usable };
 }
 async function saveCameraSource(source, frame, version) {
@@ -313,11 +331,11 @@ function drawCameraOverlay(frame) {
   const point = p => ({x:left+p.x*scale,y:top+p.y*scale});
   context.strokeStyle = frame.usable ? '#83f5a5' : '#ffcd6e'; context.fillStyle = '#83f5a533'; context.lineWidth = Math.max(2, overlay.width / 180);
   context.beginPath(); frame.points.forEach((p,i) => { const q = point(p); if (!i) context.moveTo(q.x,q.y); else context.lineTo(q.x,q.y); }); context.closePath(); context.stroke();
-  for (const [i, marker] of frame.markers.entries()) {
-    const p = point(marker), size = Math.max(16, marker.size * scale * 1.6);
-    context.fillRect(p.x-size/2,p.y-size/2,size,size); context.strokeRect(p.x-size/2,p.y-size/2,size,size);
+  for (const [i, marker] of [...frame.markers,...(frame.auxMarkers || [])].entries()) {
+    const primary = i<4, p = point(marker), size = Math.max(primary?16:8, marker.size * scale * (primary?1.6:1.1));
+    if(primary) context.fillRect(p.x-size/2,p.y-size/2,size,size); context.strokeRect(p.x-size/2,p.y-size/2,size,size);
     context.fillStyle = '#fff'; context.beginPath(); context.arc(p.x,p.y,Math.max(2,overlay.width/200),0,Math.PI*2); context.fill();
-    context.font = `bold ${Math.max(12,overlay.width/35)}px system-ui`; context.fillText(String(i+1),p.x+size/2+3,p.y);
+    context.font = `bold ${Math.max(12,overlay.width/35)}px system-ui`; if(primary) context.fillText(String(i+1),p.x+size/2+3,p.y);
     context.fillStyle = '#83f5a533';
   }
 }
@@ -440,7 +458,13 @@ function refresh() {
     }
     document.querySelectorAll('.answer-item').forEach(element => {
       const p = element.dataset.part, i = Number(element.dataset.index), j = Number(element.dataset.sub), key = p === 'p2' ? item.keys[p][i]?.[j] : item.keys[p][i], value = p === 'p2' ? r.answers[p][i][j] : r.answers[p][i];
-      element.classList.remove('correct', 'wrong'); if (G.validKey(p, key)) element.classList.add(G.isCorrect(p, value, key) ? 'correct' : 'wrong');
+      element.classList.remove('correct', 'wrong', 'ignored', 'review');
+      const skipped = G.ignored(p,key), flag = p === 'p2' ? r.flags[p][i]?.[j] : r.flags[p][i];
+      if (skipped) { element.classList.add('ignored'); element.title='X: bỏ qua, không tính điểm'; }
+      else {
+        if (flag) { element.classList.add('review'); element.title=flag; } else element.removeAttribute('title');
+        if (G.validKey(p,key)) element.classList.add(G.isCorrect(p,value,key)?'correct':'wrong');
+      }
     });
   }
   updateButtons(); if (annotatedView) draw();

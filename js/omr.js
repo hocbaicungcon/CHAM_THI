@@ -36,9 +36,23 @@
       matrix.push([0, 0, 0, x, y, 1, -x * p.y, -y * p.y]); vector.push(p.y);
     });
     const h = solve(matrix, vector);
+    const offsets = points.adjustments || [];
+    const grid = [];
+    if (offsets.length) for(let gy=0;gy<=12;gy++)for(let gx=0;gx<=8;gx++) {
+      const x=gx*template.width/8,y=gy*template.height/12;let sum=0,dx=0,dy=0;
+      for(const offset of offsets){const distance=(x-offset.x)**2+(y-offset.y)**2+14400;const weight=1/(distance*distance);sum+=weight;dx+=offset.dx*weight;dy+=offset.dy*weight;}
+      grid.push({x:dx/sum,y:dy/sum});
+    }
     return (x, y) => {
       const d = h[6] * x + h[7] * y + 1;
-      return { x: (h[0] * x + h[1] * y + h[2]) / d, y: (h[3] * x + h[4] * y + h[5]) / d };
+      const p={x:(h[0]*x+h[1]*y+h[2])/d,y:(h[3]*x+h[4]*y+h[5])/d};
+      if(grid.length){
+        const ux=Math.max(0,Math.min(8,x/template.width*8)),uy=Math.max(0,Math.min(12,y/template.height*12));
+        const gx=Math.min(7,Math.floor(ux)),gy=Math.min(11,Math.floor(uy)),fx=ux-gx,fy=uy-gy;
+        const a=grid[gy*9+gx],b=grid[gy*9+gx+1],c=grid[(gy+1)*9+gx],e=grid[(gy+1)*9+gx+1];
+        for(const k of ['x','y'])p[k]+=(a[k]*(1-fx)+b[k]*fx)*(1-fy)+(c[k]*(1-fx)+e[k]*fx)*fy;
+      }
+      return p;
     };
   }
   function detector(imageData, points) {
@@ -50,16 +64,16 @@
       const channel = c => (data[k+c]*(1-fx)+data[k+4+c]*fx)*(1-fy) +
         (data[k+width*4+c]*(1-fx)+data[k+width*4+4+c]*fx)*fy;
       const r = channel(0), g = channel(1), b = channel(2);
-      return { luminance: .2126 * r + .7152 * g + .0722 * b, pink: r > g * 1.5 && r > b * 1.3 };
+      return { luminance: .2126 * r + .7152 * g + .0722 * b, excludedColor: r > g * 1.5 && r > b * 1.3 || g > r * 1.5 && g > b * 1.3 || r > 140 && g > 80 && b < g * .55 };
     };
-    return (x, y) => {
+    const measure = (x, y) => {
       // Estimate paper brightness around each bubble, outside its printed rim.
       // A local threshold follows shadows without counting the shadow as ink.
       const background = [];
       for (let i = 0; i < 24; i++) {
         const angle = i * Math.PI / 12;
         const pixel = sample(x + 16 * Math.cos(angle), y + 16 * Math.sin(angle));
-        if (pixel && !pixel.pink) background.push(pixel.luminance);
+        if (pixel && !pixel.excludedColor) background.push(pixel.luminance);
       }
       if (background.length < 12) return 0;
       background.sort((a, b) => a - b);
@@ -68,16 +82,22 @@
       // A dead band suppresses paper texture, sensor noise and light shadows.
       const noise = Math.max(8, paper * .035);
       const fullContrast = Math.max(24, paper * .18);
-      let dark = 0, samples = 0;
-      for (let dy = -5; dy <= 5; dy += 1.5) for (let dx = -5; dx <= 5; dx += 1.5) {
-        if (dx * dx + dy * dy > 25) continue;
+      let samples = 0; const contrasts = [];
+      for (let dy = -4; dy <= 4; dy += 1) for (let dx = -4; dx <= 4; dx += 1) {
+        if (dx * dx + dy * dy > 16) continue;
         const pixel = sample(x + dx, y + dy);
         if (!pixel) continue;
-        dark += pixel.pink ? 0 : Math.max(0, Math.min(1, (paper - pixel.luminance - noise) / (fullContrast - noise)));
+        contrasts.push(pixel.excludedColor ? 0 : Math.max(0, Math.min(1, (paper - pixel.luminance - noise) / (fullContrast - noise))));
         samples++;
       }
-      return samples >= 24 ? dark / samples : 0;
+      if (samples < 24) return 0;
+      // A printed rim or glyph darkens only part of an empty bubble.
+      // Broad graphite darkens even the brighter half of its inner disk.
+      contrasts.sort((a,b)=>a-b);
+      const inner = contrasts.slice(0, Math.ceil(contrasts.length*.5));
+      return inner.reduce((sum,v)=>sum+v,0)/inner.length;
     };
+    return measure;
   }
 
   function choose(values, labels) {
@@ -135,7 +155,7 @@
   function recognize(imageData, points, profile) { return read(detector(imageData, points), profile); }
 
   // Find the four square registration marks. Timing marks resolve page rotation.
-  function autoAlign(imageData) {
+  function autoAlign(imageData, previous = null) {
     const { width, height, data } = imageData, step = Math.max(1, Math.ceil(Math.max(width, height) / 1000));
     const w = Math.ceil(width / step), h = Math.ceil(height / step), mask = new Uint8Array(w * h);
     const radius = Math.max(12, Math.min(width, height) * 20 / 1229);
@@ -149,11 +169,12 @@
       x = Math.round(x); y = Math.round(y);
       if (x < 0 || y < 0 || x >= width || y >= height) return false;
       const k = (y * width + x) * 4, r = data[k], g = data[k + 1], b = data[k + 2];
-      const paper = Math.max(light(x - radius, y), light(x + radius, y), light(x, y - radius), light(x, y + radius));
+      const surroundings = [light(x-radius,y),light(x+radius,y),light(x,y-radius),light(x,y+radius)].sort((a,b)=>a-b);
+      const paper = surroundings[1];
       return .2126 * r + .7152 * g + .0722 * b < Math.min(195, paper - Math.max(30, paper * .2)) && (Math.max(r, g, b) - Math.min(r, g, b) < 90 || Math.max(r, g, b) < 90);
     };
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) mask[y * w + x] = dark(x * step, y * step) ? 1 : 0;
-    const queue = new Int32Array(w * h), candidates = [];
+    const queue = new Int32Array(w * h), candidates = [], landmarks = [];
     for (let start = 0; start < mask.length; start++) {
       if (!mask[start]) continue;
       let head = 0, tail = 1, minX = w, maxX = 0, minY = h, maxY = 0, sumX = 0, sumY = 0;
@@ -167,14 +188,16 @@
         }
       }
       const cw = maxX - minX + 1, ch = maxY - minY + 1, ratio = cw / ch;
-      if (tail >= 9 && ratio > .55 && ratio < 1.8 && tail / (cw * ch) > .42 && cw < w * .08 && ch < h * .08) {
+      if (tail >= 9 && ratio > .2 && ratio < 5 && tail / (cw * ch) > .42 && cw < w * .08 && ch < h * .08) {
         // Refine each coarse component on the original pixels. Downsampling
         // can shift a small marker by several pixels in a phone preview.
         let sx = 0, sy = 0, pixels = 0;
         for (let yy = Math.max(0,(minY-1)*step); yy <= Math.min(height-1,(maxY+1)*step); yy++)
           for (let xx = Math.max(0,(minX-1)*step); xx <= Math.min(width-1,(maxX+1)*step); xx++)
-            if (dark(xx,yy)) { sx += xx; sy += yy; pixels++; }
-        candidates.push({ x: pixels ? sx/pixels : sumX*step/tail, y: pixels ? sy/pixels : sumY*step/tail, size: pixels ? Math.sqrt(pixels) : Math.sqrt(tail)*step });
+            if (dark(xx,yy) && light(xx,yy)<128) { sx += xx; sy += yy; pixels++; }
+        const component = {x:pixels?sx/pixels:sumX*step/tail,y:pixels?sy/pixels:sumY*step/tail,size:pixels?Math.sqrt(pixels):Math.sqrt(tail)*step,fill:tail/(cw*ch)};
+        if(component.fill>.5)landmarks.push(component);
+        if(ratio>.55&&ratio<1.8)candidates.push(component);
       }
     }
     const groups = [[], [], [], []];
@@ -184,40 +207,65 @@
       if (group >= 0) groups[group].push(p);
     }
     const targets = [[0, 0], [width, 0], [width, height], [0, height]];
-    groups.forEach((group, i) => group.sort((a, b) => Math.hypot((a.x - targets[i][0]) / width, (a.y - targets[i][1]) / height) - Math.hypot((b.x - targets[i][0]) / width, (b.y - targets[i][1]) / height)));
-    if (groups.some(group => !group.length)) return null;
+    groups.forEach((group,i)=>{
+      const distance=p=>Math.hypot((p.x-targets[i][0])/width,(p.y-targets[i][1])/height);
+      const outer=group.slice().sort((a,b)=>distance(a)-distance(b));
+      const solid=group.slice().sort((a,b)=>(distance(a)-a.fill*.65)-(distance(b)-b.fill*.65));
+      const selected=[...new Set([...outer.slice(0,2),...solid.slice(0,4)])];
+      group.splice(0,group.length,...selected);
+    });
     const anchors = [[39, 31], [1196, 31], [1196, 1701], [39, 1701]];
-    const timing = [[39, 569], [39, 952], [39, 1198], [1196, 131], [1196, 187], [1196, 222], [1196, 256], [1196, 291], [1196, 325], [1196, 359], [1196, 394], [1196, 428], [1196, 463], [1196, 497]];
+    const timing = [[1196,569],[1196,952],[1196,1198],[39, 569], [39, 952], [39, 1198], [1196, 131], [1196, 187], [1196, 222], [1196, 256], [1196, 291], [1196, 325], [1196, 359], [1196, 394], [1196, 428], [1196, 463], [1196, 497]];
     const standardAnchors = [[76,76],[1162,76],[1162,1678],[76,1678]].map(([x,y])=>[x*1229/1241,y]);
     const standardTiming = [[811,76],[76,550],[806,550],[1162,550],[1032,348],[1032,519],[364,628],[620,628],[875,628],[364,932],[620,932],[875,932],[364,975],[620,975],[875,975],[364,1155],[620,1155],[875,1155],[292,1178],[455,1178],[783,1178],[947,1178],[292,1638],[455,1638],[620,1638],[783,1638],[947,1638]].map(([x,y])=>[x*1229/1241,y]);
     const layouts = [{profile:'youngmix',anchors,timing},{profile:'standard',anchors:standardAnchors,timing:standardTiming}];
-    let best = null;
-    for (const a of groups[0].slice(0, 6)) for (const b of groups[1].slice(0, 6)) for (const c of groups[2].slice(0, 6)) for (const d of groups[3].slice(0, 6)) {
-      const quad = [a, b, c, d], sizes = quad.map(p => p.size);
-      if (Math.max(...sizes) / Math.min(...sizes) > 2.8) continue;
-      const area = Math.abs(quad.reduce((sum, p, i) => { const next = quad[(i + 1) % 4]; return sum + p.x * next.y - next.x * p.y; }, 0)) / 2;
-      if (area < width * height * .12) continue;
-      for (let rotation = 0; rotation < 4; rotation++) {
-        const rotated = quad.map((_, i) => quad[(i + rotation) % 4]);
-        try {
-          for (const layout of layouts) {
-          const map = project(rotated, layout.anchors);
-          // Phone frames have blurred timing marks and subpixel projection errors.
-          // Search only within the inner quarter of a registration square.
-          const tolerance = Math.max(1, Math.min(...sizes) * .22);
-          const hits = layout.timing.reduce((sum, [x, y]) => {
-            const p = map(x, y);
-            const hit = [-1,0,1].some(dx => [-1,0,1].some(dy => dark(p.x + dx*tolerance, p.y + dy*tolerance)));
-            return sum + Number(hit);
-          }, 0);
-          const score = hits / layout.timing.length + area / (width * height) * .02;
-          if (hits >= 8 && hits / layout.timing.length >= .6 && (!best || score > best.score)) best = { score, profile:layout.profile, markers:rotated.map(p=>({x:p.x,y:p.y,size:p.size})), points: [[0, 0], [1229, 0], [1229, 1754], [0, 1754]].map(([x, y]) => map(x, y)), rotation };
-          }
-        } catch (_) { /* Try another quadrilateral. */ }
+    const finish = result => {
+      if(result && result.adjustments.some(m=>Math.hypot(m.dx,m.dy)>1.5))result.points.adjustments=[...result.adjustments,...result.anchors.map(([x,y])=>({x,y,dx:0,dy:0}))];
+      return result;
+    };
+    const evaluate = (quad,layout,rotation) => {
+      const sizes=quad.map(p=>p.size), ratio=Math.max(...sizes)/Math.min(...sizes);
+      if(ratio>2.8)return null;
+      const area=Math.abs(quad.reduce((sum,p,i)=>{const n=quad[(i+1)%4];return sum+p.x*n.y-n.x*p.y;},0))/2;
+      if(area<width*height*.12)return null;
+      try {
+        const map=project(quad,layout.anchors), limit=Math.max(3,Math.min(...sizes)*.65);
+        const matches=layout.timing.map(([x,y])=>{
+          const p=map(x,y);let nearest=null,distance=limit;
+          for(const m of landmarks){const d=Math.hypot(m.x-p.x,m.y-p.y);if(d<distance){distance=d;nearest=m;}}
+          return nearest?{x,y,marker:nearest}:null;
+        }).filter(Boolean);
+        const support=matches.length/layout.timing.length;
+        if(matches.length<8||support<.6)return null;
+        const score=support+area/(width*height)*.08+quad.reduce((sum,p)=>sum+p.fill,0)*.025-(ratio-1)*.12;
+        return {score,support,profile:layout.profile,markers:quad.map(p=>({x:p.x,y:p.y,size:p.size})),points:[[0,0],[1229,0],[1229,1754],[0,1754]].map(([x,y])=>map(x,y)),rotation,anchors:layout.anchors,auxMarkers:matches.map(m=>m.marker),adjustments:matches.map(m=>({x:m.x,y:m.y,dx:m.marker.x-map(m.x,m.y).x,dy:m.marker.y-map(m.x,m.y).y}))};
+      } catch(_){return null;}
+    };
+    // Validate current components near the previous corners, never reuse stale corners.
+    if(previous?.markers?.length===4){
+      const layout=layouts.find(l=>l.profile===previous.profile), radius=Math.hypot(width,height)*.025;
+      const nearby=previous.markers.map(old=>{
+        let selected=null,distance=radius;
+        for(const p of candidates){const d=Math.hypot(p.x-old.x,p.y-old.y);if(d<distance&&p.size/old.size>.5&&p.size/old.size<2){distance=d;selected=p;}}
+        return selected;
+      });
+      if(layout&&nearby.every(Boolean)&&new Set(nearby).size===4){
+        const result=evaluate(nearby,layout,previous.rotation);
+        if(result?.support>=.7){result.tracked=true;return finish(result);}
       }
     }
-    return best;
+    if(groups.some(group=>!group.length))return null;
+    let best=null;
+    for(const a of groups[0])for(const b of groups[1])for(const c of groups[2])for(const d of groups[3]){
+      const quad=[a,b,c,d];
+      for(let rotation=0;rotation<4;rotation++)for(const layout of layouts){
+        const result=evaluate(quad.map((_,i)=>quad[(i+rotation)%4]),layout,rotation);
+        if(result&&(!best||result.score>best.score))best=result;
+      }
+    }
+    return finish(best);
   }
+
   function rectify(imageData, points, outputWidth = 1229) {
     const width = outputWidth, height = Math.round(outputWidth * template.height / template.width), output = new Uint8ClampedArray(width * height * 4), map = project(points);
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {

@@ -23,7 +23,7 @@
           const key = part === 1 ? item.keys[p][i]?.[j] : item.keys[p][i];
           const flag = part === 1 ? r.flags[p][i][j] : r.flags[p][i];
           const valid = G.validKey(p, key), correct = G.isCorrect(p, value, key);
-          rows.push([r.label, r.studentId || '', r.keyCode || '', ['I', 'II', 'III'][part], `${i + 1}${part === 1 ? 'abcd'[j] : ''}`, value, key ?? '', valid ? (correct ? 'Đúng' : 'Sai') : 'Thiếu đáp án', flag]);
+          rows.push([r.label, r.studentId || '', r.keyCode || '', ['I', 'II', 'III'][part], `${i + 1}${part === 1 ? 'abcd'[j] : ''}`, value, key ?? '', G.ignored(p,key) ? 'Bỏ qua (X)' : valid ? (correct ? 'Đúng' : 'Sai') : 'Thiếu đáp án', G.ignored(p,key) ? '' : flag]);
         }
       }
     }
@@ -116,12 +116,12 @@
       const p = 'p' + (part + 1);
       for (let i = 0; i < config.parts[part].count; i++) for (let j = 0; j < (part === 1 ? 4 : 1); j++) {
         const key = part === 1 ? item.keys[p][i]?.[j] : item.keys[p][i], value = part === 1 ? r.answers[p][i][j] : r.answers[p][i];
-        if (!G.validKey(p, key)) continue;
+        if (!G.validKey(p, key) || G.ignored(p,key)) continue;
         const correct = G.isCorrect(p, value, key);
         if (part < 2) {
-          if ((p === 'p1' ? ['A','B','C','D'].includes(value) : G.validKey(p, value))) mark(sheetCtx, O.choicePosition(p, i, j, value, r.profile), correct);
+          if ((p === 'p1' ? ['A','B','C','D'].includes(value) : ['Đ','S'].includes(value))) mark(sheetCtx, O.choicePosition(p, i, j, value, r.profile), correct);
           if (!correct) {
-            for (const accepted of p === 'p1' ? G.acceptedChoices(key) : [key]) {
+            for (const accepted of p === 'p1' ? G.acceptedChoices(key) : key === 'O' ? ['Đ','S'] : [key]) {
               const pos = O.choicePosition(p, i, j, accepted, r.profile); mark(sheetCtx, pos, true, true);
             }
           }
@@ -149,7 +149,7 @@
           sheetCtx.fillStyle = correct ? '#e5f7ea' : '#fff0f0'; sheetCtx.fillRect(x + 5, top, standard ? 148 : 158, 31);
           root.ChamTNIcons.draw(sheetCtx, correct ? 'check' : 'close', x + 10, top + 3, 25, correct ? '#078735' : '#df202b');
           text(sheetCtx, `Câu ${i + 1}`, x + 40, top + 23, 22, correct ? '#078735' : '#df202b', true);
-          if (!correct) { sheetCtx.fillStyle = '#fff0f0'; sheetCtx.fillRect(x + 5, bottom, standard ? 148 : 158, 26); fitted(sheetCtx, `ĐA: ${key}`, x + 12, bottom + 20, 145, 18, '#df202b'); }
+          if (!correct) { sheetCtx.fillStyle = '#fff0f0'; sheetCtx.fillRect(x + 5, bottom, standard ? 148 : 158, 26); fitted(sheetCtx, key === 'O' ? 'Chấp nhận mọi số' : `ĐA: ${key}`, x + 12, bottom + 20, 145, 18, '#df202b'); }
         }
       }
     }

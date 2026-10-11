@@ -47,45 +47,60 @@
     return left !== null && right !== null && left === right;
   }
   function validKey(part, value) {
-    if (part === 'p1') return typeof value === 'string' && (/^[OE]$/.test(value) || /^[ABCD]{1,4}$/.test(value) && new Set(value).size === value.length);
-    if (part === 'p2') return ['Đ', 'S'].includes(value);
-    return numeric(value) !== null;
+    if (part === 'p1') return typeof value === 'string' && (/^[OX]$/.test(value) || /^[ABCD]{1,4}$/.test(value) && new Set(value).size === value.length);
+    if (part === 'p2') return ['Đ', 'S', 'O', 'X'].includes(value);
+    return ['O','X'].includes(value) || numeric(value) !== null;
   }
   function acceptedChoices(key) {
-    if (!validKey('p1', key) || key === 'E') return [];
+    if (!validKey('p1', key) || key === 'X') return [];
     return key === 'O' ? ['A','B','C','D'] : key.split('');
   }
   function isCorrect(part, value, key) {
     if (!validKey(part,key)) return false;
     if (part === 'p1') return ['A','B','C','D'].includes(value) && acceptedChoices(key).includes(value);
-    return part === 'p3' ? sameNumber(value,key) : value === key;
+    if (part === 'p2') return ['Đ','S'].includes(value) && (key === 'O' || key === value);
+    return key === 'O' ? numeric(value) !== null : sameNumber(value,key);
+  }
+  function ignored(part, key) { return key === 'X'; }
+  function trueFalseFraction(correct, active, config) {
+    if (!active) return 0;
+    if (config.rule2 === 'linear') return correct / active;
+    if (config.rule2 === 'all') return correct === active ? 1 : 0;
+    // Normalize the remaining statements to four, then interpolate levels.
+    const level = 4 * correct / active, lower = Math.floor(level);
+    const values = [0, ...config.levels2];
+    return (values[lower] + (values[Math.min(4,lower+1)]-values[lower])*(level-lower)) / 100;
   }
   function grade(answers, keys, config) {
     const configErrors = validateConfig(config);
     if (configErrors.length) return { configErrors, warnings: [], scores: null };
     const scores = [0, 0, 0], warnings = [];
+    const excluded = [0,0,0];
     const [first, second, third] = config.parts;
     for (let i = 0; i < first.count; i++) {
-      if (!validKey('p1', keys.p1[i])) warnings.push(`Phần I câu ${i + 1}: cần đáp án A–D, tổ hợp như AB/ABC, O hoặc E hợp lệ.`);
+      if (!validKey('p1', keys.p1[i])) warnings.push(`Phần I câu ${i + 1}: cần đáp án A–D, tổ hợp như AB/ABC, O hoặc X hợp lệ.`);
+      else if (ignored('p1', keys.p1[i])) excluded[0]++;
       else if (isCorrect('p1', answers.p1[i], keys.p1[i])) scores[0] += questionPoints(first);
     }
     for (let i = 0; i < second.count; i++) {
       const key = keys.p2[i];
       if (!key || key.length !== 4 || key.some(v => !validKey('p2', v))) {
-        warnings.push(`Phần II câu ${i + 1}: cần đủ 4 đáp án Đ/S hợp lệ.`);
+        warnings.push(`Phần II câu ${i + 1}: cần đủ 4 đáp án Đ/S/O/X hợp lệ.`);
         continue;
       }
-      const correct = key.reduce((sum, v, j) => sum + (answers.p2[i]?.[j] === v ? 1 : 0), 0);
-      const fraction = config.rule2 === 'linear' ? correct / 4
-        : config.rule2 === 'all' ? (correct === 4 ? 1 : 0)
-        : correct ? config.levels2[correct - 1] / 100 : 0;
+      const active = key.filter(v => v !== 'X').length;
+      if (!active) excluded[1]++;
+      const correct = key.reduce((sum, v, j) => sum + (isCorrect('p2',answers.p2[i]?.[j],v) ? 1 : 0), 0);
+      const fraction = trueFalseFraction(correct, active, config);
       scores[1] += questionPoints(second) * fraction;
     }
     for (let i = 0; i < third.count; i++) {
-      if (!validKey('p3', keys.p3[i])) warnings.push(`Phần III câu ${i + 1}: thiếu đáp án số hợp lệ.`);
-      else if (sameNumber(answers.p3[i], keys.p3[i])) scores[2] += questionPoints(third);
+      if (!validKey('p3', keys.p3[i])) warnings.push(`Phần III câu ${i + 1}: cần đáp án số, O hoặc X hợp lệ.`);
+      else if (ignored('p3',keys.p3[i])) excluded[2]++;
+      else if (isCorrect('p3',answers.p3[i], keys.p3[i])) scores[2] += questionPoints(third);
     }
-    return { configErrors, warnings, scores, maxima: config.parts.map(maximum), total: scores.reduce((sum, v) => sum + v, 0) };
+    const maxima = config.parts.map((part,i) => Math.max(0, maximum(part) - excluded[i]*questionPoints(part)));
+    return { configErrors, warnings, scores, maxima, total: scores.reduce((sum, v) => sum + v, 0) };
   }
-  return { limits, validateConfig, maximum, questionPoints, parseKeys, numeric, sameNumber, validKey, acceptedChoices, isCorrect, grade };
+  return { limits, validateConfig, maximum, questionPoints, parseKeys, numeric, sameNumber, validKey, acceptedChoices, isCorrect, ignored, trueFalseFraction, grade };
 });

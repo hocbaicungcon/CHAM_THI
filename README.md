@@ -104,4 +104,12 @@ Web tự phân biệt mẫu ảnh YoungMix và `template/PHIEU TLTN CHUAN.pdf`, 
 Panel quét dùng nút thao tác cao tối thiểu 48px, nhóm nhập bài, đọc/xem bài và thao tác đặt lại/xóa riêng. Các nút chưa sử dụng được sẽ khóa khi danh sách trống. Nút tải file hỗ trợ bàn phím và chạm. Toàn bộ icon giao diện dùng SVG phẳng cục bộ trong một sprite, chia sẻ cả đường nét dấu đúng/sai cho ảnh/PDF bài chấm.
 
 ### Đáp án phần I mở rộng
-Mỗi câu ngăn cách bằng dấu cách hoặc dấu phẩy. `AB`, `ABC` chấp nhận một trong các phương án ghi liền nhau; `O` chấp nhận A/B/C/D, `E` không chấp nhận phương án nào. Bỏ trống hoặc tô nhiều không được điểm với `O`. Excel nhập mỗi câu một ô. QR cũ giữ chuỗi một ký tự/câu; QR có đáp án mở rộng dùng `_` để phân tách câu, ví dụ `AB_ABC_O_E##`. Sửa đáp án cập nhật điểm và báo cáo của tất cả bài cùng mã đề. Vòng xanh: lựa chọn đúng; đỏ: lựa chọn sai; vàng: đáp án được chấp nhận khi chọn sai.
+Mỗi câu ngăn cách bằng dấu cách hoặc dấu phẩy. `AB`, `ABC` chấp nhận một trong các phương án ghi liền nhau; `O` chấp nhận A/B/C/D, `X` bỏ qua câu và loại điểm tối đa của câu. Bỏ trống hoặc tô nhiều không được điểm với `O`. Excel nhập mỗi câu một ô. QR cũ giữ chuỗi một ký tự/câu; QR có đáp án mở rộng dùng `_` để phân tách câu, ví dụ `AB_ABC_O_X##`. Sửa đáp án cập nhật điểm và báo cáo của tất cả bài cùng mã đề. Vòng xanh: lựa chọn đúng; đỏ: lựa chọn sai; vàng: đáp án được chấp nhận khi chọn sai.
+
+### Đúng/sai O và X
+Mỗi câu đủ 4 ký tự, ví dụ `ĐSOX`. `O` chấp nhận một lựa chọn Đ hoặc S; bỏ trống/tô cả hai không được điểm. `X` bỏ qua ý; điểm chia lại cho các ý còn lại để đúng đủ vẫn đạt điểm tối đa câu. Theo mức điểm: quy đổi tỷ lệ ý đúng về 4 ý và nội suy các mốc. `XXXX` không tính điểm, giảm điểm tối đa bài tương ứng. Excel/QR cùng dùng O/X. Ý X hiện trung tính trên giao diện, không khoanh đúng/sai và ghi “Bỏ qua (X)” trong Excel.
+
+Phần III cũng nhận `O` (mọi đáp án số hợp lệ, không nhận bỏ trống) và `X` (bỏ qua câu, loại điểm tối đa câu). Đáp án E phần I đã lưu trong trình duyệt được chuyển sang X khi mở phiên bản mới.
+
+### Nhập mã đề thủ công và bám mốc camera
+Có ô mã đề (1–4 chữ số) và nút “Lưu mã đề & đáp án” để thêm hoặc cập nhật bộ đáp án. Khi gõ mã mới, đáp án đang sửa được giữ riêng, không ghi đè mã cũ trước khi lưu. Bộ đọc phân biệt nét tô trong lòng ô với viền in, dùng thêm mốc phụ ở mép/bên trong mẫu, hiệu chỉnh độ lệch cục bộ và kiểm chứng lại mốc ở mỗi khung hình trước khi bám nhanh camera. Kiểm tra PDF riêng trong `data` chỉ chạy cục bộ nếu file tồn tại và có Poppler; dữ liệu bài làm không thuộc mã nguồn xuất bản.

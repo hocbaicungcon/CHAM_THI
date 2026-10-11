@@ -45,7 +45,7 @@ test('QR answer schema handles metadata, true/false and numeric values', () => {
   assert.equal(exams.length, 1); assert.deepEqual(exams[0].keys.p2, [['Đ', 'S', 'Đ', 'S']]);
   assert.deepEqual(exams[0].keys.p3, ['-1.25', '0']);
   assert.throws(() => Inputs.parseQrPayload('https://example.com'));
-  assert.throws(() => Inputs.parseQrPayload('{"101":"AX#ĐSĐS#1"}'));
+  assert.throws(() => Inputs.parseQrPayload('{"101":"AQ#ĐSĐS#1"}'));
   assert.throws(() => Inputs.parseQrPayload('{"success":true}'));
 });
 test('automatic alignment reads rotated sheets and preserves leading zeros in IDs', () => {
@@ -209,10 +209,33 @@ test('two very faint choices are flagged for review rather than accepted', () =>
 });
 
 
-test('Excel cells and delimited QR keys accept alternative choices and O/E',()=>{
-  assert.doesNotThrow(()=>Inputs.validateExam({code:'101',keys:{p1:['AB','ABC','O','E'],p2:[],p3:[]}}));
-  const bank=Inputs.parseQrPayload(JSON.stringify({'101':'AB_ABC_O_E##'}));
-  assert.deepEqual(bank[0].keys.p1,['AB','ABC','O','E']);
+test('Excel cells and delimited QR keys accept alternative choices and O/X',()=>{
+  assert.doesNotThrow(()=>Inputs.validateExam({code:'101',keys:{p1:['AB','ABC','O','X'],p2:[],p3:[]}}));
+  const bank=Inputs.parseQrPayload(JSON.stringify({'101':'AB_ABC_O_X##'}));
+  assert.deepEqual(bank[0].keys.p1,['AB','ABC','O','X']);
   assert.deepEqual(Inputs.parseQrPayload(JSON.stringify({'101':'ABCD##'}))[0].keys.p1,['A','B','C','D']);
   assert.throws(()=>Inputs.validateExam({code:'101',keys:{p1:['AA'],p2:[],p3:[]}}));
+});
+
+test('manual, Excel validation and QR all preserve O/X in true/false and numeric answer keys',()=>{
+ const expected={p1:['AB','X'],p2:[['Đ','S','O','X']],p3:['O','X']};
+ assert.deepEqual(require('../js/grading').parseKeys(['AB X','Đ S O X','O\nX']),expected);
+ assert.doesNotThrow(()=>Inputs.validateExam({code:'101',keys:expected}));
+ assert.deepEqual(Inputs.parseQrPayload(JSON.stringify({'101':'AB_X#ĐSOX#O_X'}))[0].keys,expected);
+});
+
+
+test('camera tracking validates current registration and auxiliary marks after small movement',()=>{
+ const source=markedSheet(), previous=OMR.autoAlign(source);assert.ok(previous);
+ const shifted={width:source.width,height:source.height,data:new Uint8ClampedArray(source.data.length).fill(255)};
+ const dx=5,dy=7;
+ for(let y=0;y<source.height-dy;y++){
+  const start=y*source.width*4,end=start+(source.width-dx)*4;
+  shifted.data.set(source.data.subarray(start,end),((y+dy)*source.width+dx)*4);
+ }
+ const current=OMR.autoAlign(shifted,previous);assert.ok(current?.tracked);
+ assert.ok(current.auxMarkers.length>=8);
+ assert.equal(OMR.recognize(shifted,current.points,current.profile).answers.p1[0],'B');
+ const blank={...shifted,data:new Uint8ClampedArray(source.data.length).fill(255)};
+ assert.equal(OMR.autoAlign(blank,current),null,'A previous alignment must not create markers on an empty frame');
 });

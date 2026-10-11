@@ -111,3 +111,7 @@ button,.button{touch-action:manipulation}button:focus-visible,.button:focus-visi
 .camera-panel.showing-preview .camera-top{z-index:4}.camera-panel.showing-preview .camera-bottom{visibility:hidden}
 
 .sound-setting{display:flex;align-items:center;gap:8px;font-size:12px;color:#526a5c;margin:0 0 14px}.sound-setting input{width:18px;height:18px;accent-color:#147d64}
+
+.answer-item.ignored{background:#eef1ef;border-color:#d0d8d2;color:#718077;opacity:.7}
+
+.manual-key-form{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:12px 0}.manual-key-form label{flex:1;min-width:100px;margin:0;font-size:12px}.manual-key-form input{display:block;width:100%;box-sizing:border-box;padding:11px;border:1px solid #d9e4db;border-radius:9px;margin-top:6px;font:inherit}.manual-key-form button{min-height:42px;font-size:12px;border:1px solid #c9ddce;border-radius:9px;background:#edf6ed;color:#147d64}

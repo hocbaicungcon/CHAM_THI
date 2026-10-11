@@ -54,7 +54,7 @@ test('disabled sections need no keys and zero questions do not divide by zero', 
   assert.equal(result.total, 0); assert.deepEqual(result.warnings, []);
 });
 test('missing and invalid keys are reported only in active questions', () => {
-  const result = G.grade(answers, G.parseKeys(['A X', 'ĐSĐ', 'abc']), config());
+  const result = G.grade(answers, G.parseKeys(['A Q', 'ĐSĐ', 'abc']), config());
   assert.equal(result.warnings.length, 3);
   assert.deepEqual(result.scores, [2, 0, 0]);
   assert.deepEqual(G.parseKeys(['A,B', 'D S D S', '1,25']).p2[0], ['Đ', 'S', 'Đ', 'S']);
@@ -93,15 +93,15 @@ test('local OMR measures marks from pixel data without a network dependency', ()
 });
 
 
-test('multiple accepted choices, O and E use the same rule for every single selection', () => {
-  for (const key of ['AB','ABC','O','E']) for(const choice of ['A','B','C','D','', 'AB']) {
-    const expected=['A','B','C','D'].includes(choice) && (key==='O' || key!=='E' && key.includes(choice));
+test('multiple accepted choices, O and X use the same rule for every single selection', () => {
+  for (const key of ['AB','ABC','O','X']) for(const choice of ['A','B','C','D','', 'AB']) {
+    const expected=['A','B','C','D'].includes(choice) && (key==='O' || key!=='X' && key.includes(choice));
     assert.equal(G.isCorrect('p1',choice,key),expected,`${key} / ${choice}`);
     const result=G.grade({p1:[choice],p2:[],p3:[]},{p1:[key],p2:[],p3:[]},config([1,0,0]));
     assert.equal(result.total, expected?4:0); assert.deepEqual(result.warnings,[]);
   }
   for(const key of ['AA','AO','A B','AX','',null]) assert.equal(G.validKey('p1',key),false);
-  assert.deepEqual(G.parseKeys(['AB ABC O E','','']).p1,['AB','ABC','O','E']);
+  assert.deepEqual(G.parseKeys(['AB ABC O X','','']).p1,['AB','ABC','O','X']);
 });
 test('editing a shared key recalculates all papers and detailed report correctness', () => {
   const Reports=require('../js/reports.js'), cfg=config([1,0,0]);
@@ -112,4 +112,38 @@ test('editing a shared key recalculates all papers and detailed report correctne
   const items=papers.map(record=>({record,keys:shared,result:G.grade(record.answers,shared,cfg)}));
   assert.deepEqual(items.map(item=>item.result.total),[4,4]);
   assert.deepEqual(Reports.detailRows(items,cfg).slice(1).map(row=>row[7]),['Đúng','Đúng']);
+});
+
+test('true/false O accepts a single Đ or S and X redistributes points among active statements',()=>{
+ const cfg=config([0,1,0]), key={p1:[],p2:[['Đ','S','O','X']],p3:[]};
+ for(const rule of ['linear','all','levels']) for(const any of ['Đ','S']) {
+  cfg.rule2=rule;
+  const result=G.grade({p1:[],p2:[['Đ','S',any,'']],p3:[]},key,cfg);
+  assert.equal(result.total,4); assert.equal(result.maxima[1],4);assert.deepEqual(result.warnings,[]);
+ }
+ for(const any of ['','O','ĐS']) assert.equal(G.isCorrect('p2',any,'O'),false);
+ cfg.rule2='linear';assert.equal(G.grade({p1:[],p2:[['Đ','Đ','S','Đ']],p3:[]},key,cfg).total,8/3);
+ cfg.rule2='all';assert.equal(G.grade({p1:[],p2:[['Đ','Đ','S','Đ']],p3:[]},key,cfg).total,0);
+ cfg.rule2='levels';assert.ok(Math.abs(G.grade({p1:[],p2:[['Đ','Đ','S','Đ']],p3:[]},key,cfg).total-5/3)<1e-10);
+});
+test('XXXX removes a whole true/false question from the maximum without awarding points',()=>{
+ const cfg=config([0,2,0]);
+ for(const rule of ['linear','all','levels']) {
+  cfg.rule2=rule;
+  const result=G.grade({p1:[],p2:[['Đ','S','Đ','S'],['Đ','S','Đ','S']],p3:[]},{p1:[],p2:[['X','X','X','X'],['Đ','S','Đ','S']],p3:[]},cfg);
+  assert.equal(result.total,2);assert.equal(result.maxima[1],2);
+ }
+});
+test('X skips whole multiple-choice and numeric questions, while numeric O accepts valid numbers only',()=>{
+ const cfg=config([2,0,2]);
+ const result=G.grade({p1:['A','B'],p2:[],p3:['-1,25','']},{p1:['X','AB'],p2:[],p3:['O','X']},cfg);
+ assert.deepEqual(result.scores,[2,0,1]);assert.deepEqual(result.maxima,[2,0,1]);assert.deepEqual(result.warnings,[]);
+ for(const value of ['0','-1.25',',5']) assert.equal(G.isCorrect('p3',value,'O'),true);
+ for(const value of ['','abc','O','1,2,3']) assert.equal(G.isCorrect('p3',value,'O'),false);
+ assert.equal(G.validKey('p1','E'),false);
+ const Reports=require('../js/reports.js');
+ const record={label:'Test',answers:{p1:[''],p2:[['','S','Đ','']],p3:['']},flags:{p1:['Bỏ trống'],p2:[['Bỏ trống','','','Bỏ trống']],p3:['Kiểm tra số']}};
+ const rows=Reports.detailRows([{record,keys:{p1:['X'],p2:[['X','O','O','X']],p3:['X']}}],config([1,1,1]));
+ assert.deepEqual(rows.slice(1).map(r=>r[7]),['Bỏ qua (X)','Bỏ qua (X)','Đúng','Đúng','Bỏ qua (X)','Bỏ qua (X)']);
+ assert.ok(rows.slice(1).filter(r=>r[7]==='Bỏ qua (X)').every(r=>r[8]===''));
 });

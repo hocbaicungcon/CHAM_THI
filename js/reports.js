@@ -92,7 +92,7 @@
     return pages;
   }
   function mark(ctx, position, correct, dashed = false) {
-    ctx.save(); ctx.strokeStyle = correct ? '#078735' : '#df202b'; ctx.lineWidth = 3.5;
+    ctx.save(); ctx.strokeStyle = correct ? '#078735' : '#df202b'; ctx.lineWidth = 5;
     if (dashed) ctx.setLineDash([4, 3]);
     ctx.beginPath(); ctx.arc(position.x, position.y, 12, 0, Math.PI * 2); ctx.stroke();
     if (!dashed) {
@@ -111,6 +111,7 @@
       const factor = Math.min(sheet.width / r.source.width, sheet.height / r.source.height);
       sheetCtx.drawImage(r.source, (sheet.width - r.source.width * factor) / 2, (sheet.height - r.source.height * factor) / 2, r.source.width * factor, r.source.height * factor);
     }
+    const numericDot = r.answers && r.points?.length === 4 ? O.detector(r.source.getContext('2d').getImageData(0, 0, r.source.width, r.source.height), r.points) : null;
     if (r.answers && item.result?.scores) for (let part = 0; part < 3; part++) {
       const p = 'p' + (part + 1);
       for (let i = 0; i < config.parts[part].count; i++) for (let j = 0; j < (part === 1 ? 4 : 1); j++) {
@@ -127,6 +128,23 @@
           const standard = r.profile === 'standard';
           const x = standard ? (128 + i * 163.8) * 1229 / 1241 : 74 + i * 177.5;
           const top = standard ? 1218 : 1228, bottom = standard ? 1615 : 1669;
+          // Mark the physical digit columns, including leading empty columns.
+          // The parsed number cannot recover their positions on the paper.
+          if (numericDot) {
+            const base = standard ? 165 + i * 163.8 : 126 + i * 177.5;
+            const sx = v => standard ? v * 1229 / 1241 : v;
+            const spacing = standard ? 34.4 : 30;
+            for (let col = 0; col < 4; col++) {
+              const px = sx(base + spacing * col);
+              const ys = Array.from({length:10}, (_,d) => standard ? 1340 + 27.15*d : 1348 + 33*d);
+              const selected = O.choose(ys.map(y => numericDot(px,y)), '0123456789'.split(''));
+              if (selected.value) mark(sheetCtx, {x:px,y:ys[Number(selected.value)]}, correct);
+            }
+            const negativeY = standard ? 1286 : 1283, commaY = standard ? 1313 : 1317;
+            if (numericDot(sx(base), negativeY) > .32) mark(sheetCtx, {x:sx(base),y:negativeY},correct);
+            const comma = O.choose([1,2].map(col => numericDot(sx(base + spacing*col),commaY)), ['1','2']);
+            if (comma.value) mark(sheetCtx, {x:sx(base+spacing*Number(comma.value)),y:commaY},correct);
+          }
           sheetCtx.fillStyle = correct ? '#e5f7ea' : '#fff0f0'; sheetCtx.fillRect(x + 5, top, standard ? 148 : 158, 31);
           root.ChamTNIcons.draw(sheetCtx, correct ? 'check' : 'close', x + 10, top + 3, 25, correct ? '#078735' : '#df202b');
           text(sheetCtx, `Câu ${i + 1}`, x + 40, top + 23, 22, correct ? '#078735' : '#df202b', true);

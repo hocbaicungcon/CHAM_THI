@@ -3,7 +3,7 @@ const $ = id => document.getElementById(id);
 const G = window.ChamTNGrading, OMR = window.ChamTNOMR, Inputs = window.ChamTNInputs, Reports = window.ChamTNReports;
 const canvas = $('photo'), ctx = canvas.getContext('2d');
 const names = ['I', 'II', 'III'];
-const storedIds = ['key1', 'key2', 'key3', 'n1', 'n2', 'n3', 'w1', 'w2', 'w3', 'mode1', 'mode2', 'mode3', 'rule2', 'level1', 'level2', 'level3', 'level4'];
+const storedIds = ['key1', 'key2', 'key3', 'n1', 'n2', 'n3', 'w1', 'w2', 'w3', 'mode1', 'mode2', 'mode3', 'rule2', 'level1', 'level2', 'level3', 'level4', 'cameraPreviewSeconds'];
 let records = [], activeId = '', exams = [], preferredCode = '', nextId = 0, loadVersion = 0, importingVersion = 0;
 const cameraGate = new window.ChamTNScanner.ScanGate();
 let cameraTimer = null, cameraPaused = false, cameraBusy = false, cameraCount = 0;
@@ -214,7 +214,7 @@ function stopCamera() {
   cameraVersion++; clearTimeout(cameraTimer); cameraTimer = null;
   cameraStream?.getTracks().forEach(track => track.stop()); cameraStream = null;
   $('cameraVideo').srcObject = null; $('cameraPanel').classList.add('hidden'); $('captureCamera').disabled = true;
-  document.body.classList.remove('camera-open'); drawCameraOverlay(null); cameraGate.reset(); cameraBusy = false;
+  $('cameraPanel').classList.remove('showing-preview'); document.body.classList.remove('camera-open'); drawCameraOverlay(null); cameraGate.reset(); cameraBusy = false;
   if (document.activeElement && $('cameraPanel').contains(document.activeElement)) $('openCamera').focus();
 }
 function cameraSource() {
@@ -252,12 +252,19 @@ async function saveCameraSource(source, frame, version) {
     $('cameraLast').textContent = `${record.studentId ? 'SBD ' + record.studentId : 'Bài ' + cameraCount} · ${item.result?.scores ? format(item.result.total) + ' điểm' : 'Chưa tính điểm'} · ${item.status}`;
     const preview = Reports.annotatedCanvas(item, config()), target = $('cameraPreviewCanvas');
     target.width = preview.width; target.height = preview.height; target.getContext('2d').drawImage(preview, 0, 0);
-    $('cameraPreview').classList.remove('hidden');
+    $('cameraPreview').classList.remove('hidden'); $('cameraPreview').classList.add('expanded');
+    $('cameraPreviewToggle').setAttribute('aria-expanded', 'true'); $('cameraPanel').classList.add('showing-preview');
     $('cameraStatus').textContent = 'Đã lưu bài. Thay phiếu tiếp theo.';
     $('cameraProgress').style.width = '0%';
     $('cameraFlash').classList.remove('flash'); void $('cameraFlash').offsetWidth; $('cameraFlash').classList.add('flash');
     navigator.vibrate?.(70);
     $('uploadStatus').textContent = `Đã thêm ${cameraCount} bài từ camera.`;
+    const seconds = Math.min(5, Math.max(.1, number('cameraPreviewSeconds') || 1.5));
+    await new Promise(resolve => setTimeout(resolve, seconds * 1000));
+    if (version === cameraVersion) {
+      $('cameraPreview').classList.remove('expanded'); $('cameraPanel').classList.remove('showing-preview');
+      $('cameraPreviewToggle').setAttribute('aria-expanded', 'false');
+    }
   } catch (error) { if (version === cameraVersion) $('cameraStatus').textContent = 'Không lưu được ảnh: ' + error.message; }
   finally { if (version === cameraVersion) { cameraBusy = false; $('captureCamera').disabled = false; } }
 }
@@ -315,11 +322,13 @@ $('openCamera').onclick = async () => {
     scanCamera(version);
   } catch (error) { if (version !== cameraVersion) return; stopCamera(); $('scanError').textContent = error.name === 'NotAllowedError' ? 'Chưa được cấp quyền camera. Cho phép camera trong trình duyệt hoặc dùng “Chụp bằng điện thoại”.' : 'Không mở được camera. Hãy dùng nút “Chụp bằng điện thoại” hoặc tải ảnh có sẵn.'; $('scanError').scrollIntoView({ behavior: 'smooth' }); }
 };
+$('cameraPreviewSeconds').onchange = () => { $('cameraPreviewSeconds').value = Math.min(5, Math.max(.1, number('cameraPreviewSeconds') || 1.5)); save('cameraPreviewSeconds'); };
 $('scanCameraButton').onclick = () => $('openCamera').click();
 $('cameraVideo').onloadedmetadata = () => { $('captureCamera').disabled = !$('cameraVideo').videoWidth || cameraBusy; };
 $('closeCamera').onclick = stopCamera;
 $('cameraPreviewToggle').onclick = () => {
   const expanded = $('cameraPreview').classList.toggle('expanded');
+  $('cameraPanel').classList.toggle('showing-preview', expanded);
   if (expanded && !cameraPaused) $('pauseCamera').click();
   $('cameraPreviewToggle').setAttribute('aria-expanded', String(expanded));
 };

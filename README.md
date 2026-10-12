@@ -127,3 +127,19 @@ Khi cập nhật tài nguyên web, chạy `node scripts/build-offline-assets.cjs
 Bấm ảnh bài đã chấm sau khi dừng quét hoặc ảnh thu nhỏ trong danh sách kết quả. Vuốt lên/phải để xem bài tiếp; vuốt xuống/trái để xem bài trước. Có nút chuyển bài, phím mũi tên và nút đóng; tới đầu/cuối danh sách sẽ dừng. Nút “Xóa dữ liệu bài chấm” xóa ảnh, kết quả, bản lưu tạm và bộ đếm camera để bắt đầu đợt mới, giữ lại đáp án/thang điểm.
 
 Bộ đọc PDF dùng JavaScript và worker thường lưu cục bộ. Nếu trình duyệt không mở được worker, ứng dụng chuyển sang xử lý trong trang. Khi nhận thấy một phương án tô rất đậm bên cạnh dấu tô mờ, phần I có thể nhận phương án đậm nhưng vẫn gắn cờ kiểm tra; hai phương án rõ vẫn không tự chọn một.
+
+### Tốc độ nhận dạng
+
+Camera xác nhận tối thiểu 3 khung hình đồng nhất trong 160 ms, kiểm tra lại sau
+30 ms kể từ khi xử lý xong khung trước. Kết quả đọc của khung được dùng trực tiếp
+để chấm; lưu ảnh vào IndexedDB chạy tiếp trong nền. Trạng thái lưu cục bộ vẫn báo
+khi hoàn tất hoặc khi gặp lỗi. Thời gian preview 0,1–5 giây được tính riêng.
+
+Thuật toán căn phiếu dùng lưới không gian để tìm chấm định vị và phép chọn trung
+vị cục bộ không cần sắp xếp. Không thay đổi ngưỡng đọc nét tô. Đo trên 25 trang
+mẫu ở cạnh dài 1697 px bằng Node trên máy phát triển: căn + đọc 47–118 ms,
+trung vị 66 ms. Đây chưa phải phép đo camera trên điện thoại; mục tiêu dưới
+500 ms phụ thuộc thiết bị, độ phân giải, ánh sáng và độ ổn định của phiếu.
+
+Đo lại bằng `node scripts/benchmark-omr.cjs /path/to/page.png` (có thể truyền nhiều
+ảnh PNG RGB/RGBA). Thời gian này chưa gồm giải mã PDF, vẽ preview và lưu ảnh.

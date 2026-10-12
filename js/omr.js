@@ -181,8 +181,9 @@
       x = Math.round(x); y = Math.round(y);
       if (x < 0 || y < 0 || x >= width || y >= height) return false;
       const k = (y * width + x) * 4, r = data[k], g = data[k + 1], b = data[k + 2];
-      const surroundings = [light(x-radius,y),light(x+radius,y),light(x,y-radius),light(x,y+radius)].sort((a,b)=>a-b);
-      const paper = surroundings[1];
+      let a=light(x-radius,y), bb=light(x+radius,y), c=light(x,y-radius), d=light(x,y+radius);
+      if(a>bb)[a,bb]=[bb,a]; if(c>d)[c,d]=[d,c];
+      const paper = Math.min(Math.max(a,c),Math.min(bb,d));
       return .2126 * r + .7152 * g + .0722 * b < Math.min(195, paper - Math.max(30, paper * .2)) && (Math.max(r, g, b) - Math.min(r, g, b) < 90 || Math.max(r, g, b) < 90);
     };
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) mask[y * w + x] = dark(x * step, y * step) ? 1 : 0;
@@ -236,6 +237,10 @@
       if(result && result.adjustments.some(m=>Math.hypot(m.dx,m.dy)>1.5))result.points.adjustments=[...result.adjustments,...result.anchors.map(([x,y])=>({x,y,dx:0,dy:0}))];
       return result;
     };
+    // Index observed marks once instead of searching every component for every
+    // hypothetical homography. Exact distances still decide each match.
+    const cellSize=32, cells=new Map();
+    for(const marker of landmarks){const key=Math.floor(marker.x/cellSize)+','+Math.floor(marker.y/cellSize);if(!cells.has(key))cells.set(key,[]);cells.get(key).push(marker);}
     const evaluate = (quad,layout,rotation) => {
       const sizes=quad.map(p=>p.size), ratio=Math.max(...sizes)/Math.min(...sizes);
       if(ratio>2.8)return null;
@@ -245,7 +250,9 @@
         const map=project(quad,layout.anchors), limit=Math.max(3,Math.min(...sizes)*.65);
         const matches=layout.timing.map(([x,y])=>{
           const p=map(x,y);let nearest=null,distance=limit;
-          for(const m of landmarks){const d=Math.hypot(m.x-p.x,m.y-p.y);if(d<distance){distance=d;nearest=m;}}
+          for(let cy=Math.floor((p.y-limit)/cellSize);cy<=Math.floor((p.y+limit)/cellSize);cy++)
+            for(let cx=Math.floor((p.x-limit)/cellSize);cx<=Math.floor((p.x+limit)/cellSize);cx++)
+              for(const m of cells.get(cx+','+cy)||[]){const d=Math.hypot(m.x-p.x,m.y-p.y);if(d<distance){distance=d;nearest=m;}}
           return nearest?{x,y,marker:nearest}:null;
         }).filter(Boolean);
         const support=matches.length/layout.timing.length;

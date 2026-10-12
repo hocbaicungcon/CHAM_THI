@@ -228,15 +228,20 @@ function recognizeRecord(record) {
 }
 async function addSource(source, label, activate = true, alignment = null) {
   const record = { id: String(++nextId), source, label, points: [], answers: null, flags: null, studentId: '', examCode: '', keyCode: preferredCode, autoAligned: false, error: '' };
-  const pixels = source.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, source.width, source.height);
-  const aligned = alignment || OMR.autoAlign(pixels);
+  const aligned = alignment || OMR.autoAlign(source.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, source.width, source.height));
   if (aligned) {
     record.points = aligned.points; record.profile = aligned.profile; record.autoAligned = true;
-    try { recognizeRecord(record); } catch (error) { record.error = error.message; }
+    try {
+      if (aligned.result) {
+        record.answers = aligned.result.answers; record.flags = aligned.result.flags;
+        Object.assign(record, aligned.result.metadata); chooseKey(record);
+      } else recognizeRecord(record);
+    } catch (error) { record.error = error.message; }
   }
   records.push(record); if (assess(record).result?.scores && !record.error && !G.validateConfig(config()).length) soundGraded();
   if (activate || !activeId) selectRecord(record.id); else { renderPicker(); refresh(); }
-  await localSave.catch(() => {});
+  // Camera preview can appear while the serialized local save finishes.
+  if (!alignment) await localSave.catch(() => {});
   await new Promise(resolve => setTimeout(resolve, 0));
   return record;
 }
@@ -333,7 +338,7 @@ function cameraFrame(source) {
   const usable = nearEnough && !G.validateConfig(cfg).length && cfg.parts.some(p => p.count > 0) &&
     (filled > 0 || !result.metadata.studentUncertain) && ambiguous <= Math.max(2, flags.length * .15);
   const identity = !result.metadata.studentUncertain && !result.metadata.examUncertain ? result.metadata.studentId + ':' + result.metadata.examCode : '';
-  return { points: aligned.points, markers: aligned.markers, auxMarkers: aligned.auxMarkers, nearEnough, profile: aligned.profile, width: source.width, height: source.height, identity,
+  return { points: aligned.points, markers: aligned.markers, auxMarkers: aligned.auxMarkers, nearEnough, profile: aligned.profile, width: source.width, height: source.height, identity, result,
     signature: JSON.stringify([identity, answers]), usable };
 }
 async function saveCameraSource(source, frame, version) {
@@ -397,7 +402,7 @@ async function scanCamera(version) {
       else $('cameraStatus').textContent = state.reason === 'missing' ? 'Đưa đủ bốn mốc đen vào khung.' : state.reason === 'duplicate' ? 'Bài này đã lưu. Thay phiếu tiếp theo.' : state.reason === 'quality' ? !frame?.nearEnough ? 'Đưa máy gần phiếu hơn để đọc rõ các ô.' : 'Làm rõ nét tô và kiểm tra cấu hình, hoặc chụp thủ công.' : 'Giữ phiếu trong khung, rung nhẹ vẫn quét được…';
     }
   } catch (error) { if (version === cameraVersion) $('cameraStatus').textContent = 'Không đọc được khung hình. Giữ máy ổn định hoặc chụp thủ công.'; }
-  finally { if (version === cameraVersion && cameraStream) cameraTimer = setTimeout(() => scanCamera(version), 450); }
+  finally { if (version === cameraVersion && cameraStream) cameraTimer = setTimeout(() => scanCamera(version), 30); }
 }
 $('openCamera').onclick = async () => {
   stopCamera(); const version = cameraVersion;

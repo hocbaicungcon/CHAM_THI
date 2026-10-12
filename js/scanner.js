@@ -20,13 +20,13 @@
       const newIdentity=old&&old.identity&&frame.identity&&old.identity!==frame.identity;
       if(!moved&&!newIdentity&&old.signature!==frame.signature&&this.pending!==frame.signature){
         this.pending=frame.signature;
-        return {ready:false,reason:'stabilizing',progress:Math.min(.85,(now-this.since)/1000)};
+        return {ready:false,reason:'stabilizing',progress:Math.min(.85,(now-this.since)/160)};
       }
       if(moved||newIdentity||old.signature!==frame.signature){this.stable=1;this.since=now;this.anchor=frame.points.map(p=>({...p}));}else this.stable++;
       this.pending=''; this.previous=frame; this.lastGood=now;
-      return {ready:this.stable>=3&&now-this.since>=1000&&now>=this.cooldown,reason:'stabilizing',progress:Math.min(1,(now-this.since)/1000)};
+      return {ready:this.stable>=3&&now-this.since>=160&&now>=this.cooldown,reason:'stabilizing',progress:Math.min(1,(now-this.since)/160)};
     }
-    accept(frame,now){this.lastSignature=frame.signature;if(frame.identity)this.identities.add(frame.identity);this.cooldown=now+1800;this.forgetCandidate();}
+    accept(frame,now){this.lastSignature=frame.signature;if(frame.identity)this.identities.add(frame.identity);this.cooldown=now+160;this.forgetCandidate();}
   }
   return {ScanGate};
 });

@@ -1,8 +1,9 @@
 'use strict';
-const CACHE='chamtn-offline-v3';
+const CACHE='chamtn-offline-v4';
 self.addEventListener('install',event=>event.waitUntil((async()=>{
  const assets=await (await fetch(new URL('offline-assets.json',self.registration.scope),{cache:'no-store'})).json();
  const cache=await caches.open(CACHE);await cache.addAll(assets.map(asset=>new URL(asset,self.registration.scope).href));
+ await self.skipWaiting();
 })()));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{
  for(const name of await caches.keys())if(name.startsWith('chamtn-offline-')&&name!==CACHE)await caches.delete(name);

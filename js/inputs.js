@@ -6,6 +6,7 @@
   'use strict';
   const base = typeof document !== 'undefined' ? new URL('.', document.currentScript.src) : null;
   let pdfPromise;
+  let fallbackWorkerPromise;
   function trimTail(values, empty = value => !String(value ?? '').trim()) {
     const result = values.slice(); while (result.length && empty(result[result.length - 1])) result.pop(); return result;
   }
@@ -96,17 +97,43 @@
   }
   async function excelFromFile(file) { return workbookExams(window.XLSX.read(await file.arrayBuffer(), { type: 'array' }), window.XLSX); }
   async function pdfLibrary() {
-    if (!pdfPromise) pdfPromise = import(new URL('../vendor/pdfjs/pdf.min.mjs', base).href).then(lib => {
-      lib.GlobalWorkerOptions.workerSrc = new URL('../vendor/pdfjs/pdf.worker.min.mjs', base).href; return lib;
-    });
+    if (!pdfPromise) pdfPromise = Promise.resolve().then(() => {
+      const lib = window.pdfjsLib;
+      if (!lib) throw new Error('Chưa tải được bộ đọc PDF cục bộ. Tải lại trang khi có mạng một lần rồi thử lại.');
+      lib.GlobalWorkerOptions.workerSrc = new URL('../vendor/pdfjs/pdf.worker.min.js', base).href; return lib;
+    }).catch(error => { pdfPromise = null; throw error; });
     return pdfPromise;
+  }
+  function fallbackWorker() {
+    if (!fallbackWorkerPromise) fallbackWorkerPromise = new Promise((resolve,reject) => {
+      const script = document.createElement('script');
+      script.src = new URL('../vendor/pdfjs/pdf.worker.min.js', base).href;
+      script.onload = resolve;
+      script.onerror = () => { script.remove(); fallbackWorkerPromise = null; reject(new Error('Không tải được bộ xử lý PDF cục bộ.')); };
+      document.head.appendChild(script);
+    });
+    return fallbackWorkerPromise;
   }
   async function* pdfPages(file) {
     const lib = await pdfLibrary();
-    const task = lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), cMapUrl: new URL('../vendor/pdfjs/cmaps/', base).href, cMapPacked: true, standardFontDataUrl: new URL('../vendor/pdfjs/standard_fonts/', base).href, wasmUrl: new URL('../vendor/pdfjs/wasm/', base).href, isEvalSupported: false });
-    let pdf;
+    const bytes = await file.arrayBuffer();
+    const options = { cMapUrl: new URL('../vendor/pdfjs/cmaps/', base).href, cMapPacked: true, standardFontDataUrl: new URL('../vendor/pdfjs/standard_fonts/', base).href, wasmUrl: new URL('../vendor/pdfjs/wasm/', base).href, isEvalSupported: false, useWorkerFetch: false };
+    let pdf, task, worker, port;
     try {
-      pdf = await task.promise;
+      try {
+        // A same-origin classic worker avoids module imports and blob wrappers.
+        port = new Worker(new URL('../vendor/pdfjs/pdf.worker.min.js', base).href);
+        const failed = new Promise((_,reject) => { port.onerror = event => { event.preventDefault(); reject(new Error('Không mở được worker PDF')); }; });
+        worker = new lib.PDFWorker({port});
+        task = lib.getDocument({...options, data: new Uint8Array(bytes.slice(0)), worker});
+        pdf = await Promise.race([task.promise,failed]);
+      } catch (_) {
+        await task?.destroy().catch(() => {}); worker?.destroy(); port?.terminate(); worker = port = null;
+        // Browsers that block workers can still read PDFs on the main thread.
+        await fallbackWorker();
+        task = lib.getDocument({...options, data: new Uint8Array(bytes.slice(0))});
+        pdf = await task.promise;
+      }
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i), natural = page.getViewport({ scale: 1 });
         const scale = Math.min(1600 / natural.width, 2200 / natural.height), viewport = page.getViewport({ scale });
@@ -118,7 +145,7 @@
     } catch (error) {
       if (error.name === 'PasswordException') throw new Error('PDF có mật khẩu. Hãy dùng bản PDF đã mở khóa.');
       throw error;
-    } finally { if (pdf) await pdf.destroy(); else await task.destroy(); }
+    } finally { await task?.destroy(); worker?.destroy(); port?.terminate(); }
   }
   return { validateExam, parseQrPayload, parseRows, workbookExams, matchingCode, makeCanvas, imageFromFile, qrFromFile, excelFromFile, pdfPages };
 });

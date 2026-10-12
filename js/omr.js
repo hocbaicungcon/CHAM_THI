@@ -104,9 +104,12 @@
     return measure;
   }
 
-  function choose(values, labels) {
+  function choose(values, labels, allowFadedAlternative = false) {
     const ranked = values.map((value, i) => ({ value, i })).sort((a, b) => b.value - a.value), top = ranked[0], next = ranked[1];
     const marked = top.value > .32 && next.value <= .32 && top.value - next.value > .13;
+    if (!marked && allowFadedAlternative && top.value >= .9 && next.value < .58 && top.value-next.value > .4) {
+      return { value: labels[top.i], flag: 'Dấu tô mờ ở ô khác · cần kiểm tra' };
+    }
     return { value: marked ? labels[top.i] : '', flag: marked ? '' : top.value > .24 ? 'Không rõ hoặc tô nhiều' : 'Bỏ trống' };
   }
   function read(dot, profile = 'youngmix') {
@@ -115,7 +118,7 @@
     const answers = { p1: [], p2: [], p3: [] }, flags = { p1: [], p2: [], p3: [] }, bases = standard ? [173,428.5,684,939.5] : [133,411,689,967];
     for (let q = 0; q < template.limits[0]; q++) {
       const x = bases[Math.floor(q / 10)], y = standard ? 670 + 26.4 * (q % 10) : 644 + 29.5 * (q % 10);
-      const result = choose([0, 1, 2, 3].map(j => dot(x + (standard ? 51.1 : 49) * j, y)), ['A', 'B', 'C', 'D']);
+      const result = choose([0, 1, 2, 3].map(j => dot(x + (standard ? 51.1 : 49) * j, y)), ['A', 'B', 'C', 'D'], true);
       answers.p1.push(result.value); flags.p1.push(result.flag);
     }
     for (let q = 0; q < template.limits[1]; q++) {

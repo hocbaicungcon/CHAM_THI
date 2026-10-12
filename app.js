@@ -9,7 +9,7 @@ const cameraGate = new window.ChamTNScanner.ScanGate();
 let cameraPreviewRecord = null, cameraAlignment = null;
 let cameraTimer = null, cameraPaused = false, cameraBusy = false, cameraCount = 0;
 let loading = false, exporting = false, annotatedView = false, cameraStream = null, cameraVersion = 0;
-let restoringSession = true, localSave = Promise.resolve(), saveRevision = 0;
+let restoringSession = true, localSave = Promise.resolve(), saveRevision = 0, clearFailed = false;
 function saveSession() {
   if (restoringSession) return localSave;
   const revision = ++saveRevision;
@@ -35,6 +35,15 @@ const previousModes = [1, 2, 3].map(i => $('mode' + i).value);
 const format = (value, digits = 2) => value.toLocaleString('vi-VN', { maximumFractionDigits: digits });
 const emptyKeys = () => ({ p1: [], p2: [], p3: [] });
 const current = () => records.find(record => record.id === activeId);
+const paperViewer = window.ChamTNPaperViewer.create({
+  dialog: $('paperViewer'),
+  getIds: () => records.filter(record => record.answers).map(record => record.id),
+  render: id => {
+    selectRecord(id); annotatedView = true; draw(); saveSession();
+    const item = assess(current());
+    return { image: canvas, label: current().label, score: item.result?.scores ? `${format(item.result.total)} điểm` : 'Chưa tính điểm' };
+  }
+});
 function number(id) { return $(id).value.trim() === '' ? NaN : Number($(id).value); }
 function config() {
   return { parts: [1, 2, 3].map(i => ({ count: number('n' + i), points: number('w' + i), mode: $('mode' + i).value })), rule2: $('rule2').value, levels2: [1, 2, 3, 4].map(i => number('level' + i)) };
@@ -60,8 +69,8 @@ function updateButtons() {
   const r = current(), errors = G.validateConfig(config());
   $('analyze').disabled = !r || r.points.length !== 4 || errors.length > 0 || !config().parts.some(p => p.count > 0) || loading;
   $('viewAnnotated').disabled = !r?.answers;
-  $('resetCorners').disabled = !r || loading; $('clearBatch').disabled = !records.length || exporting;
-  $('newBatch').disabled = !records.length || exporting;
+  $('resetCorners').disabled = !r || loading; $('clearBatch').disabled = !records.length && !clearFailed || exporting;
+  $('newBatch').disabled = !records.length && !clearFailed || exporting;
   $('export').disabled = !r?.answers || errors.length > 0;
   for (const id of ['exportExcel', 'exportSummaryPdf', 'exportAnnotatedPdf']) $(id).disabled = !records.length || !!errors.length || loading || exporting;
 }
@@ -260,6 +269,8 @@ $('file').onchange = event => { loadFiles([...event.target.files]); event.target
 $('cameraFile').onchange = event => { loadFiles([...event.target.files]); event.target.value = ''; };
 $('cancelLoad').onclick = () => { loadVersion++; loading = false; $('cancelLoad').classList.add('hidden'); $('uploadStatus').textContent = 'Đã dừng tải. Các trang đã xử lý được giữ lại.'; refresh(); };
 async function clearGradedData() {
+  clearFailed = false;
+  paperViewer.close();
   stopCamera(); loadVersion++; loading = false;
   records = []; activeId = ''; nextId = 0; annotatedView = false;
   cameraCount = 0; cameraPreviewRecord = null;
@@ -272,12 +283,13 @@ async function clearGradedData() {
   try {
     await localSave;
     if (!records.length) $('sessionStatus').textContent = 'Đã xóa bài chấm và bản lưu tạm · Sẵn sàng chấm đợt mới';
-  } catch (_) { $('sessionStatus').textContent = 'Chưa xóa được bản lưu tạm trên thiết bị. Hãy thử lại trước khi tải lại trang.'; }
+  } catch (_) { clearFailed = true; updateButtons(); $('sessionStatus').textContent = 'Chưa xóa được bản lưu tạm trên thiết bị. Hãy thử lại trước khi tải lại trang.'; }
 }
 $('clearBatch').onclick = clearGradedData;
 $('newBatch').onclick = clearGradedData;
 canvas.onclick = event => {
-  const r = current(); if (!r || annotatedView) return;
+  const r = current(); if (!r) return;
+  if (annotatedView && r.answers) { paperViewer.open(r.id); return; }
   if (r.points.length === 4) r.points = [];
   const bounds = canvas.getBoundingClientRect(); r.points.push({ x: (event.clientX - bounds.left) * canvas.width / bounds.width, y: (event.clientY - bounds.top) * canvas.height / bounds.height });
   r.autoAligned = false; r.answers = null; r.flags = null; r.error = ''; $('scanError').textContent = ''; refresh(); draw();
@@ -316,7 +328,7 @@ function cameraFrame(source) {
   const cameraKeys = exams.length ? (exams.find(exam => exam.code === (Inputs.matchingCode(exams, result.metadata.examCode) || preferredCode))?.keys || emptyKeys()) : keys();
   const flags = [result.flags.p1.slice(0, count(0)).filter((_,i) => !G.ignored('p1',cameraKeys.p1[i])), result.flags.p2.slice(0, count(1)).flatMap((row,i) => row.filter((_,j) => !G.ignored('p2',cameraKeys.p2[i]?.[j]))), result.flags.p3.slice(0, count(2)).filter((_,i) => !G.ignored('p3',cameraKeys.p3[i]))].flat();
   const filled = answers.flat(2).filter(Boolean).length;
-  const ambiguous = flags.filter(flag => /không rõ|Không rõ/.test(flag)).length;
+  const ambiguous = flags.filter(flag => /không rõ|Không rõ|Dấu tô mờ/.test(flag)).length;
   const nearEnough = Math.min(...aligned.markers.map((m,i) => Math.hypot(m.x-aligned.markers[(i+1)%4].x,m.y-aligned.markers[(i+1)%4].y))) >= 420;
   const usable = nearEnough && !G.validateConfig(cfg).length && cfg.parts.some(p => p.count > 0) &&
     (filled > 0 || !result.metadata.studentUncertain) && ambiguous <= Math.max(2, flags.length * .15);
@@ -471,7 +483,16 @@ function refresh() {
   const items = records.map(assess), ready = items.filter(item => item.result?.scores).length;
   $('batchSummary').textContent = `${records.length} bài / trang · ${ready} bài đã tính điểm · ${records.length - ready} bài chưa tính được điểm.`;
   $('batchRows').replaceChildren();
+  $('batchThumbnails').replaceChildren();
   for (const item of items) {
+    if (item.record.answers) {
+      const thumb = document.createElement('button'); thumb.type = 'button'; thumb.className = 'paper-thumb';
+      thumb.setAttribute('aria-label', `Xem toàn màn hình ${item.record.label}`);
+      const picture = document.createElement('canvas'); picture.width = 70; picture.height = 99;
+      picture.getContext('2d').drawImage(item.record.source,0,0,70,99);
+      const caption = document.createElement('span'); caption.textContent = `Bài ${records.indexOf(item.record)+1}${item.result?.scores ? ' · '+format(item.result.total)+' điểm' : ''}`;
+      thumb.append(picture,caption); thumb.onclick = () => paperViewer.open(item.record.id); $('batchThumbnails').appendChild(thumb);
+    }
     const row = document.createElement('tr'); if (item.record.id === activeId) row.className = 'selected';
     const cell = document.createElement('td'), button = document.createElement('button'); button.textContent = item.record.label; button.onclick = () => selectRecord(item.record.id); cell.appendChild(button); row.appendChild(cell);
     for (const value of [item.record.studentId || '—', item.record.keyCode || item.record.examCode || '—', ...(item.result?.scores?.map(v => format(v)) || ['—', '—', '—']), item.result?.scores ? format(item.result.total) : '—', item.status]) { const td = document.createElement('td'); td.textContent = value; row.appendChild(td); }

@@ -120,4 +120,10 @@ Có ô mã đề (1–4 chữ số) và nút “Lưu mã đề & đáp án” đ
 
 Lần mở đầu cần mạng để tải bộ nhớ đệm. Khi xuất hiện “Sẵn sàng dùng khi mất mạng”, trang có thể mở lại, chấm ảnh/PDF và xuất kết quả ngoại tuyến. Dữ liệu lưu trên cùng trình duyệt và thiết bị; xóa dữ liệu website hoặc dùng chế độ riêng tư có thể làm mất bản lưu. Nếu bộ nhớ đầy/không khả dụng, ứng dụng hiển thị lỗi lưu và vẫn cho xuất kết quả.
 
-Khi cập nhật tài nguyên web, cập nhật danh sách `offline-assets.json` và tăng phiên bản cache trong `sw.js`. Không đưa bài học sinh vào danh sách cache hay Git. Cache mới kích hoạt khi các tab dùng phiên bản cũ đã đóng; dữ liệu IndexedDB không bị xóa khi cập nhật cache.
+Khi cập nhật tài nguyên web, cập nhật danh sách `offline-assets.json` và tăng phiên bản cache trong `sw.js`. Không đưa bài học sinh vào danh sách cache hay Git. Cache mới kích hoạt sau khi tải đủ tài nguyên; tải lại trang để nhận phiên bản mới. Dữ liệu IndexedDB không bị xóa khi cập nhật cache.
+
+### Xem bài toàn màn hình
+
+Bấm ảnh bài đã chấm sau khi dừng quét hoặc ảnh thu nhỏ trong danh sách kết quả. Vuốt lên/phải để xem bài tiếp; vuốt xuống/trái để xem bài trước. Có nút chuyển bài, phím mũi tên và nút đóng; tới đầu/cuối danh sách sẽ dừng. Nút “Xóa dữ liệu bài chấm” xóa ảnh, kết quả, bản lưu tạm và bộ đếm camera để bắt đầu đợt mới, giữ lại đáp án/thang điểm.
+
+Bộ đọc PDF dùng JavaScript và worker thường lưu cục bộ. Nếu trình duyệt không mở được worker, ứng dụng chuyển sang xử lý trong trang. Khi nhận thấy một phương án tô rất đậm bên cạnh dấu tô mờ, phần I có thể nhận phương án đậm nhưng vẫn gắn cờ kiểm tra; hai phương án rõ vẫn không tự chọn một.

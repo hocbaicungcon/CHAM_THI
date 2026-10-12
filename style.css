@@ -117,3 +117,20 @@ button,.button{touch-action:manipulation}button:focus-visible,.button:focus-visi
 .manual-key-form{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:12px 0}.manual-key-form label{flex:1;min-width:100px;margin:0;font-size:12px}.manual-key-form input{display:block;width:100%;box-sizing:border-box;padding:11px;border:1px solid #d9e4db;border-radius:9px;margin-top:6px;font:inherit}.manual-key-form button{min-height:42px;font-size:12px;border:1px solid #c9ddce;border-radius:9px;background:#edf6ed;color:#147d64}
 
 .session-status{font-size:.8rem;color:var(--muted,#536b64);margin:.4rem 0;overflow-wrap:anywhere}
+/* Graded paper gallery and full-screen reader. */
+.batch-thumbnails{display:flex;gap:.65rem;overflow-x:auto;padding:.6rem 0;scroll-snap-type:x proximity}
+.paper-thumb{flex:0 0 92px;padding:.35rem;border:1px solid #d9e3dd;border-radius:12px;background:#f6faf7;color:#123d35;scroll-snap-align:start;text-align:center}
+.paper-thumb canvas{width:70px;height:99px;object-fit:contain;display:block;margin:auto;border-radius:5px}
+.paper-thumb span{display:block;font-size:.72rem;margin-top:.3rem;line-height:1.3}
+.paper-viewer{position:fixed;inset:0;margin:0;border:0;padding:0;width:100vw;height:100dvh;max-width:none;max-height:none;background:#102b25;color:white;overflow:hidden}
+.paper-viewer[open]{display:flex;flex-direction:column}
+.paper-viewer::backdrop{background:#102b25}
+.paper-viewer-open{overflow:hidden}
+.paper-viewer-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:calc(env(safe-area-inset-top) + 10px) 12px 8px;flex:0 0 auto}
+.paper-viewer-top b{display:block;font-size:.9rem;overflow-wrap:anywhere}
+.paper-viewer-top small{display:block;color:#c9ded6;margin-top:4px;font-size:.8rem}
+.paper-viewer-stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;user-select:none}
+.paper-viewer-stage canvas{display:block;width:100%;height:100%;object-fit:contain;max-width:100%;max-height:100%}
+.paper-viewer-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px calc(env(safe-area-inset-bottom) + 8px);flex:0 0 auto}
+.paper-viewer-bottom span{font-size:.7rem;text-align:center;color:#c9ded6}
+.paper-viewer-bottom button{font-size:.75rem;padding:.5rem .6rem;white-space:nowrap}

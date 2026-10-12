@@ -173,7 +173,7 @@
         }
       }
     }
-    sheetCtx.save(); sheetCtx.font = '16px Arial, sans-serif'; sheetCtx.textAlign = 'center'; sheetCtx.fillStyle = '#52636b'; sheetCtx.fillText('Chấm bài miễn phí tại https://giasu.ai.vn', sheet.width / 2, 1741); sheetCtx.restore();
+    sheetCtx.save(); sheetCtx.font = '32px Arial, sans-serif'; sheetCtx.textAlign = 'center'; sheetCtx.fillStyle = '#52636b'; sheetCtx.fillText('Chấm bài miễn phí tại https://giasu.ai.vn', sheet.width / 2, 1741); sheetCtx.restore();
     const canvas = document.createElement('canvas'); canvas.width = 1229; canvas.height = 1934;
     const ctx = canvas.getContext('2d'); ctx.fillStyle = '#edf8fc'; ctx.fillRect(0, 0, 1229, 180); ctx.drawImage(sheet, 0, 180);
     text(ctx, 'PHIẾU ĐÃ CHẤM · CHẤM TN', 28, 36, 30, '#123c4b', true);

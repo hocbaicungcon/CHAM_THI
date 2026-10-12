@@ -187,3 +187,10 @@ Khi bấm **Đặt lại góc** hoặc chọn góc trên ảnh gốc, **Undo** q
 Với góc giấy bị gập, không chỉ khôi phục từ một mốc phụ: web tinh chỉnh phép chiếu bằng ba góc rõ và nhiều mốc phụ phân bố trên phiếu, loại mốc lệch khỏi nhóm, rồi kiểm tra lại độ khớp. Nếu chấm góc chỉ còn mảnh đen nhỏ (kích thước dưới 80% trung vị các góc), web cũng thử tinh chỉnh bằng các mốc còn nguyên. Chỉ nhận kết quả tinh chỉnh khi không giảm số mốc khớp và không làm sai lệch các góc rõ. Đã kiểm tra riêng trang đầu PDF số 7 ở cạnh dài 1697 / 2200 px; các số bị màu đánh dấu che vẫn giữ cảnh báo cần kiểm tra.
 
 - Sửa đáp án theo từng mã đề: mỗi dòng có số câu trên máy tính; điện thoại có nút A/B/C/D/O/X và ô chọn từng ý Đ/S/O/X. Có thể mở “Nhập / dán nhiều đáp án” để nhập hàng loạt. Ô chưa nhập giữ đúng vị trí câu và báo thiếu đáp án.
+
+### Giao diện và lượt tải bài
+- Logo SVG trong suốt; giao diện dùng xanh cyan và xanh đậm theo logo. QR tạo tại web chèn logo trực tiếp, không khung nền, và tự giải mã để kiểm tra. QR mẫu giữ nguyên bộ đáp án, đã thêm logo.
+- Chọn ảnh/PDF mở hộp thoại xác nhận với Bắt đầu chấm / Hủy bỏ. Cùng hộp thoại hiển thị file và trang đang xử lý, cho dừng, rồi hiện thống kê lượt tải và âm báo hoàn tất riêng (theo cài đặt âm báo).
+- Danh sách cần xem lại nêu rõ phần, câu, ý và lý do; cập nhật khi sửa ô nhận dạng hoặc thay đổi đáp án/cấu hình.
+- Mẫu chuẩn có mã đề 3 ô / SBD 6 ô được nhận dạng riêng; giữ các góc quan sát được để tránh suy ra góc sai làm méo phiếu.
+- Ảnh và PDF bài chấm có footer “Chấm bài miễn phí tại https://giasu.ai.vn” dưới hai mốc góc dưới.

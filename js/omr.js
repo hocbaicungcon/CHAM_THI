@@ -141,7 +141,7 @@
     return { value: marked ? labels[top.i] : '', flag: marked ? '' : top.value > .24 ? 'Không rõ hoặc tô nhiều' : 'Bỏ trống' };
   }
   function read(dot, profile = 'youngmix') {
-    const standard = profile === 'standard';
+    const standard = profile === 'standard' || profile === 'standard3';
     if (standard) { const original = dot; dot = (x,y) => {const score=original(x * 1229 / 1241,y);dot.lastEvidence=original.lastEvidence;dot.lastOccluded=original.lastOccluded;return score;}; }
     const chooseDots=(positions,labels,allowFaded=false)=>{
       const evidence=[],occluded=[];
@@ -191,7 +191,8 @@
       answers.p3.push(value); flags.p3.push(uncertain ? 'Kiểm tra số: có ô không rõ, khoảng trống hoặc dấu phẩy không rõ' : '');
     }
     const digits = (x, columns) => Array.from({ length: columns }, (_, col) => choose(Array.from({ length: 10 }, (_, d) => dot(x + 24 * col, standard ? 195 + 33.9 * d : 200 + 34.5 * d)), '0123456789'.split('')));
-    const student = digits(standard ? 835 : 861, 8), exam = digits(standard ? 1062 : 1075, 4);
+    const threeCode = profile === 'standard3';
+    const student = digits(threeCode ? 909 : standard ? 835 : 861, threeCode ? 6 : 8), exam = digits(threeCode ? 1086 : standard ? 1062 : 1075, threeCode ? 3 : 4);
     const metadata = {
       studentId: student.map(v => v.value).join(''),
       examCode: exam.map(v => v.value).join(''),
@@ -238,7 +239,8 @@
         }
       }
       const cw = maxX - minX + 1, ch = maxY - minY + 1, ratio = cw / ch;
-      if (tail >= 9 && ratio > .2 && ratio < 5 && tail / (cw * ch) > .42 && cw < w * .08 && ch < h * .08) {
+      const outerSquare = ratio > .85 && ratio < 1.2 && Math.min(cw,ch)*step > Math.min(width,height)*.018 && (maxX < w*.12 || minX > w*.88) && (maxY < h*.1 || minY > h*.9);
+      if (tail >= 9 && ratio > .2 && ratio < 5 && (tail / (cw * ch) > .42 || outerSquare && tail / (cw*ch) > .35) && cw < w * .08 && ch < h * .08) {
         // Refine each coarse component on the original pixels. Downsampling
         // can shift a small marker by several pixels in a phone preview.
         let sx = 0, sy = 0, pixels = 0;
@@ -246,7 +248,7 @@
           for (let xx = Math.max(0,(minX-1)*step); xx <= Math.min(width-1,(maxX+1)*step); xx++)
             if (dark(xx,yy) && (faintPass || light(xx,yy)<128)) { sx += xx; sy += yy; pixels++; }
         const component = {x:pixels?sx/pixels:sumX*step/tail,y:pixels?sy/pixels:sumY*step/tail,size:pixels?Math.sqrt(pixels):Math.sqrt(tail)*step,fill:tail/(cw*ch)};
-        if(component.fill>.5)landmarks.push(component);
+        if(component.fill>.5 || component.fill>.42 && ratio>.85 && ratio<1.2 && component.size>Math.min(width,height)*.018)landmarks.push(component);
         if(ratio>.55&&ratio<1.8)candidates.push(component);
       }
     }
@@ -269,9 +271,19 @@
     const timing = [[1196,569],[1196,952],[1196,1198],[39, 569], [39, 952], [39, 1198], [1196, 131], [1196, 187], [1196, 222], [1196, 256], [1196, 291], [1196, 325], [1196, 359], [1196, 394], [1196, 428], [1196, 463], [1196, 497]];
     const standardAnchors = [[76,76],[1162,76],[1162,1678],[76,1678]].map(([x,y])=>[x*1229/1241,y]);
     const standardTiming = [[811,76],[76,550],[806,550],[1162,550],[1032,348],[1032,519],[364,628],[620,628],[875,628],[364,932],[620,932],[875,932],[364,975],[620,975],[875,975],[364,1155],[620,1155],[875,1155],[292,1178],[455,1178],[783,1178],[947,1178],[292,1638],[455,1638],[620,1638],[783,1638],[947,1638]].map(([x,y])=>[x*1229/1241,y]);
-    const layouts = [{profile:'youngmix',anchors,timing},{profile:'standard',anchors:standardAnchors,timing:standardTiming}];
+    const standard3Timing = [[880,76],[76,571],[882,550],[1162,550],[1056,349],[1056,519]].map(([x,y])=>[x*1229/1241,y]).concat(standardTiming.slice(6));
+    const layouts = [{profile:'youngmix',anchors,timing},{profile:'standard',anchors:standardAnchors,timing:standardTiming},{profile:'standard3',anchors:standardAnchors,timing:standard3Timing}];
     const finish = initialResult => {
       let result = initialResult;
+      if (result?.profile === 'standard3') {
+        // Prefer the four squares actually seen on a three-code sheet. A
+        // near-identical recovered solution must not displace a visible corner.
+        const observed = result.markers.map(mark => candidates.filter(p => Math.hypot(p.x-mark.x,p.y-mark.y) < mark.size*.3).sort((a,b)=>Math.hypot(a.x-mark.x,a.y-mark.y)-Math.hypot(b.x-mark.x,b.y-mark.y))[0]);
+        if (observed.every(Boolean) && new Set(observed).size === 4) {
+          const exact = evaluate(observed, layouts.find(l=>l.profile==='standard3'), result.rotation);
+          if (exact?.support >= .9 && Math.sqrt(exact.adjustments.reduce((sum,m)=>sum+m.dx*m.dx+m.dy*m.dy,0)/exact.adjustments.length) < 2) result = exact;
+        }
+      }
       if (result && result.recoveredCorner === undefined && result.support >= .9) {
         const sizes=result.markers.map(marker=>marker.size).sort((a,b)=>a-b),median=(sizes[1]+sizes[2])/2;
         const weak=result.markers.findIndex(marker=>marker.size<median*.8);
@@ -424,7 +436,7 @@
     return { data: output, width, height };
   }
   function choicePosition(part, index, sub, value, profile) {
-    if (profile === 'standard') {
+    if (profile === 'standard' || profile === 'standard3') {
       let x,y;
       const bases = [173,428.5,684,939.5];
       if (part === 'p1') { x=bases[Math.floor(index/10)]+51.1*'ABCD'.indexOf(value); y=670+26.4*(index%10); }

@@ -27,8 +27,8 @@
     const original=ctx.getImageData(0,0,canvas.width,canvas.height),image=await logo();
     for(const fraction of [.15,.12,.09]){
       ctx.putImageData(original,0,0);
-      const modules=Math.max(3,Math.floor(count*fraction)|1),side=modules*cell,offset=(canvas.width-side)/2,pad=cell;
-      ctx.fillStyle='white';ctx.fillRect(offset-pad,offset-pad,side+2*pad,side+2*pad);ctx.drawImage(image,offset,offset,side,side);
+      const modules=Math.max(3,Math.floor(count*fraction)|1),side=modules*cell,offset=(canvas.width-side)/2;
+      ctx.drawImage(image,offset,offset,side,side);
       const pixels=ctx.getImageData(0,0,canvas.width,canvas.height),decoded=root.jsQR(pixels.data,pixels.width,pixels.height,{inversionAttempts:'dontInvert'});
       if(decoded?.data===value)return canvas;
       await new Promise(resolve=>setTimeout(resolve,0));

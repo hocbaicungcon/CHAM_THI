@@ -62,7 +62,7 @@ function assess(record) {
   if (exams.length && !record.keyCode) return { record, keys: recordKeys, result: null, status: record.codeIssue || 'Chọn mã đề đáp án để chấm' };
   const result = G.grade(record.answers, recordKeys, config());
   let status = result.configErrors.length ? 'Cấu hình chưa hợp lệ' : result.warnings.length ? `Điểm tạm tính · ${result.warnings.length} câu thiếu đáp án` : 'Đã chấm';
-  const review = checkCount(record); if (review) status += ` · ${review} ô cần kiểm tra`;
+  const review = reviewIssues(record); if (review.length) status += ` · ${review.length} ô cần kiểm tra`;
   if (record.studentUncertain && !record.studentEdited) status += ' · kiểm tra SBD';
   return { record, keys: recordKeys, result, status };
 }
@@ -289,7 +289,7 @@ function draw() {
     r.points.forEach((point, i) => { ctx.fillStyle = '#147d64'; ctx.beginPath(); ctx.arc(point.x, point.y, 9, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'white'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(i + 1, point.x, point.y + 4); }); ctx.textAlign = 'left';
   }
   $('cornerStatus').textContent = `${r.points.length}/4 góc · ${r.answers ? 'đã đọc ô tô' : 'chưa đọc'}`;
-  $('alignmentStatus').textContent = r.autoAligned ? 'Đã tự căn bằng mốc đen · ' + (r.profile === 'standard' ? 'Phiếu chuẩn PDF' : 'Phiếu YoungMix') : r.points.length === 4 ? 'Căn chỉnh thủ công' : 'Thiếu mốc: chọn bốn góc để chấm';
+  $('alignmentStatus').textContent = r.autoAligned ? 'Đã tự căn bằng mốc đen · ' + (r.profile === 'standard3' ? 'Phiếu mã đề 3 ô' : r.profile === 'standard' ? 'Phiếu chuẩn PDF' : 'Phiếu YoungMix') : r.points.length === 4 ? 'Căn chỉnh thủ công' : 'Thiếu mốc: chọn bốn góc để chấm';
   updateButtons();
 }
 let scanAudio = null;
@@ -306,11 +306,11 @@ function unlockScanAudio() {
 }
 document.addEventListener('pointerdown', unlockScanAudio, {passive:true});
 document.addEventListener('keydown', unlockScanAudio);
-function soundGraded() {
+function soundGraded(completed = false) {
   if (!$('scanSound').checked || scanAudio?.state !== 'running') return;
   try {
     const start = scanAudio.currentTime;
-    for (const [offset, frequency] of [[0,880],[.13,1174.66]]) {
+    for (const [offset, frequency] of (completed ? [[0,523.25],[.16,659.25],[.32,783.99],[.48,1046.5]] : [[0,880],[.13,1174.66]])) {
       const tone = scanAudio.createOscillator(), gain = scanAudio.createGain();
       tone.type = 'sine'; tone.frequency.value = frequency;
       gain.gain.setValueAtTime(0,start+offset);
@@ -350,30 +350,31 @@ async function addSource(source, label, activate = true, alignment = null) {
 async function loadFiles(files) {
   if (!files.length) return; stopCamera();
   const version = ++loadVersion; loading = true; $('cancelLoad').classList.remove('hidden'); $('scanError').textContent = ''; updateButtons();
-  const errors = []; let added = 0;
+  const errors = [], loadedRecords = []; let added = 0;
   for (const file of files) {
     if (version !== loadVersion) break;
     try {
       if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
         for await (const page of Inputs.pdfPages(file)) {
           if (version !== loadVersion) break;
-          $('uploadStatus').textContent = `Đang căn & chấm ${file.name} · trang ${page.page}/${page.total}`;
-          await addSource(page.source, `${file.name} · trang ${page.page}`, added === 0); added++;
+          $('uploadStatus').textContent = `Đang căn & chấm ${file.name} · trang ${page.page}/${page.total}`; $('batchProgress').textContent = $('uploadStatus').textContent;
+          loadedRecords.push(await addSource(page.source, `${file.name} · trang ${page.page}`, added === 0)); added++;
         }
       } else {
-        $('uploadStatus').textContent = `Đang căn & chấm ${file.name}…`;
+        $('uploadStatus').textContent = `Đang căn & chấm ${file.name}…`; $('batchProgress').textContent = $('uploadStatus').textContent;
         const image = await Inputs.imageFromFile(file); if (version !== loadVersion) break;
-        await addSource(Inputs.makeCanvas(image), file.name, added === 0); added++;
+        loadedRecords.push(await addSource(Inputs.makeCanvas(image), file.name, added === 0)); added++;
       }
     } catch (error) { errors.push(`${file.name}: ${error.message}`); }
   }
   if (version === loadVersion) {
     loading = false; $('cancelLoad').classList.add('hidden'); $('uploadStatus').textContent = `Đã thêm ${added} bài / trang${errors.length ? ` · ${errors.length} file lỗi` : ''}.`;
     $('scanError').textContent = errors.join(' '); refresh();
+    showBatchComplete(loadedRecords, errors); soundGraded(true);
   }
 }
-$('file').onchange = event => { loadFiles([...event.target.files]); event.target.value = ''; };
-$('cameraFile').onchange = event => { loadFiles([...event.target.files]); event.target.value = ''; };
+$('file').onchange = event => { stageBatch([...event.target.files]); event.target.value = ''; };
+$('cameraFile').onchange = event => { stageBatch([...event.target.files]); event.target.value = ''; };
 $('cancelLoad').onclick = () => { loadVersion++; loading = false; $('cancelLoad').classList.add('hidden'); $('uploadStatus').textContent = 'Đã dừng tải. Các trang đã xử lý được giữ lại.'; refresh(); };
 async function clearGradedData() {
   clearFailed = false;
@@ -385,7 +386,7 @@ async function clearGradedData() {
   $('cameraPreview').classList.add('hidden');
   $('studentId').value = ''; $('detectedCode').textContent = 'Chưa đọc được';
   $('cancelLoad').classList.add('hidden'); $('uploadStatus').textContent = '';
-  $('scanError').textContent = ''; $('exportStatus').textContent = '';
+  $('scanError').textContent = ''; $('exportMessage').textContent = '';
   renderPicker(); refresh(); draw();
   try {
     await localSave;
@@ -594,11 +595,70 @@ function answerItem(record, part, index, value, sub) {
   item.appendChild(control); return item;
 }
 $('studentId').oninput = () => { const r = current(); if (r) { r.studentId = $('studentId').value; r.studentEdited = true; refresh(); } };
+function reviewIssues(record) { return window.ChamTNBatchFeedback.review(record, keysFor(record), [count(0),count(1),count(2)]); }
+function renderReviewList() {
+  const host = $('reviewList'); host.replaceChildren();
+  const heading = document.createElement('h3'); heading.textContent = 'Các bài cần xem lại';
+  for (const record of records) {
+    const issues = reviewIssues(record), notes = [];
+    if (record.error) notes.push(record.error);
+    if (!record.answers) notes.push('Chưa đọc được ô tô: cần căn góc và đọc lại.');
+    if (record.codeIssue) notes.push(record.codeIssue);
+    if (record.studentUncertain && !record.studentEdited) notes.push('Kiểm tra số báo danh.');
+    if (record.examUncertain) notes.push('Kiểm tra mã đề trên phiếu.');
+    if (!issues.length && !notes.length) continue;
+    if (!host.childElementCount) host.append(heading);
+    const box = document.createElement('details'); box.className = 'review-paper';
+    const summary = document.createElement('summary'); summary.textContent = `${record.label} · ${issues.length} ô cần xem lại${notes.length ? ' · kiểm tra thông tin / xử lý' : ''}`; box.append(summary);
+    const locations = document.createElement('p'); locations.className = 'review-locations'; locations.textContent = issues.map(issue => issue.label).join(' · '); summary.append(locations);
+    const list = document.createElement('ul');
+    for (const note of notes) { const li = document.createElement('li'); li.textContent = note; list.append(li); }
+    for (const issue of issues) { const li = document.createElement('li'); li.textContent = `${issue.label}: ${issue.reason}`; list.append(li); }
+    box.append(list);
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'small'; button.textContent = 'Mở bài để kiểm tra';
+    button.onclick = () => { document.querySelector('[data-view=results]').click(); selectRecord(record.id); $('results').scrollIntoView({block:'start'}); }; box.append(button); host.append(box);
+  }
+  if (records.length && !host.childElementCount) { const p = document.createElement('p'); p.className = 'hint'; p.textContent = 'Không có ô nhận dạng nào cần xem lại.'; host.append(p); }
+}
+function showBatchComplete(batch, errors) {
+  const stats = window.ChamTNBatchFeedback.statistics(batch.map(assess), [count(0),count(1),count(2)], errors.length);
+  $('batchCompleteTitle').textContent = stats.total ? 'Đã chấm xong' : 'Đã xử lý xong'; $('batchProgress').textContent = 'Đã xử lý xong lượt tải này.'; $('batchStart').hidden = true; $('batchCompleteReview').hidden = false; $('batchCompleteClose').textContent = 'Đóng'; $('batchCompleteStats').hidden = false;
+  $('batchCompleteSummary').textContent = `Đã xử lý ${stats.total} bài / trang trong lượt tải này. ${!stats.total ? 'Không có bài nào được xử lý thành công; xem lỗi file bên dưới.' : stats.graded < stats.total ? 'Một số bài chưa tính được điểm; xem trạng thái để bổ sung đáp án hoặc căn lại phiếu.' : 'Đã tính điểm toàn bộ bài.'}`;
+  $('batchCompleteStats').replaceChildren();
+  for (const [label,value] of [['Đã đọc ô tô',stats.recognized],['Đã tính điểm',stats.graded],['Bài cần kiểm tra',stats.review],['Chưa đọc được / lỗi xử lý',stats.failed],['File tải lỗi',stats.fileErrors]]) { const box = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = label; dd.textContent = value; box.append(dt,dd); $('batchCompleteStats').append(box); }
+  $('batchCompleteErrors').textContent = errors.join('\n');
+  if (!$('batchCompleteDialog').open) $('batchCompleteDialog').showModal();
+}
+let pendingBatchFiles = [];
+function stageBatch(files) {
+  if (!files.length) return;
+  pendingBatchFiles = files;
+  $('batchCompleteTitle').textContent = 'Sẵn sàng chấm bài';
+  $('batchCompleteSummary').textContent = `Đã chọn ${files.length} file. Bấm Bắt đầu chấm để căn phiếu và nhận dạng đáp án. Các bài đã chấm trước đó được giữ lại.`;
+  $('batchSelectedFiles').replaceChildren();
+  for (const file of files) { const li = document.createElement('li'); li.textContent = file.name; $('batchSelectedFiles').append(li); }
+  $('batchProgress').textContent = ''; $('batchCompleteErrors').textContent = ''; $('batchCompleteStats').hidden = true;
+  $('batchStart').hidden = false; $('batchCompleteReview').hidden = true; $('batchCompleteClose').textContent = 'Hủy bỏ';
+  $('batchCompleteDialog').showModal();
+}
+$('batchStart').onclick = () => {
+  if (!pendingBatchFiles.length || loading) return;
+  const files = pendingBatchFiles; pendingBatchFiles = [];
+  unlockScanAudio(); $('batchCompleteSummary').textContent = `Đang xử lý ${files.length} file. Có thể bấm Dừng chấm để giữ lại các bài đã xử lý.`; $('batchStart').hidden = true; $('batchCompleteClose').textContent = 'Dừng chấm'; $('batchCompleteTitle').textContent = 'Đang chấm bài';
+  loadFiles(files);
+};
+$('batchCompleteClose').onclick = () => {
+  if (loading) { $('cancelLoad').click(); $('batchCompleteTitle').textContent = 'Đã dừng chấm'; $('batchProgress').textContent = $('uploadStatus').textContent; $('batchCompleteClose').textContent = 'Đóng'; $('batchCompleteReview').hidden = false; return; }
+  pendingBatchFiles = []; $('batchCompleteDialog').close();
+};
+$('batchCompleteDialog').addEventListener('cancel', event => { if (loading) { event.preventDefault(); $('batchCompleteClose').click(); } else pendingBatchFiles = []; });
+$('batchCompleteReview').onclick = () => { $('batchCompleteDialog').close(); document.querySelector('[data-view=results]').click(); $('batchPanel').scrollIntoView({block:'start'}); };
 function refresh() {
   saveSession();
   const r = current(); $('results').classList.toggle('hidden', !r?.answers); $('batchPanel').classList.toggle('hidden', !records.length);
   const items = records.map(assess), ready = items.filter(item => item.result?.scores).length;
   $('batchSummary').textContent = `${records.length} bài / trang · ${ready} bài đã tính điểm · ${records.length - ready} bài chưa tính được điểm.`;
+  renderReviewList();
   $('batchRows').replaceChildren();
   $('batchThumbnails').replaceChildren();
   for (const item of items) {
@@ -612,7 +672,7 @@ function refresh() {
     }
     const row = document.createElement('tr'); if (item.record.id === activeId) row.className = 'selected';
     const cell = document.createElement('td'), button = document.createElement('button'); button.textContent = item.record.label; button.onclick = () => selectRecord(item.record.id); cell.appendChild(button); row.appendChild(cell);
-    for (const value of [item.record.studentId || '—', item.record.keyCode || item.record.examCode || '—', ...(item.result?.scores?.map(v => format(v)) || ['—', '—', '—']), item.result?.scores ? format(item.result.total) : '—', item.status]) { const td = document.createElement('td'); td.textContent = value; row.appendChild(td); }
+    for (const value of [item.record.studentId || '—', item.record.keyCode || item.record.examCode || '—', ...(item.result?.scores?.map(v => format(v)) || ['—', '—', '—']), item.result?.scores ? format(item.result.total) : '—', item.status + (reviewIssues(item.record).length ? ' · ' + reviewIssues(item.record).map(issue => issue.label).join(', ') : '')]) { const td = document.createElement('td'); td.textContent = value; row.appendChild(td); }
     row.lastChild.className = 'status-cell'; $('batchRows').appendChild(row);
   }
   if (r?.answers) {
@@ -624,7 +684,7 @@ function refresh() {
       result.scores.forEach((value, i) => { $('score' + (i + 1)).textContent = `${format(value)} / ${format(result.maxima[i])}`; });
       const messages = result.warnings.slice(0, 3); if (result.warnings.length > 3) messages.push(`Còn ${result.warnings.length - 3} câu thiếu đáp án hợp lệ.`);
       if (checkCount(r)) messages.push(`${checkCount(r)} ô cần kiểm tra kết quả nhận dạng.`);
-      if (r.studentUncertain && !r.studentEdited) messages.push('SBD chưa đọc đủ 8 chữ số; có thể nhập lại ở trên.');
+      if (r.studentUncertain && !r.studentEdited) messages.push('SBD chưa đọc đủ chữ số; có thể nhập lại ở trên.');
       if (r.examUncertain && exams.length) messages.push(`Đang dùng mã đề ${r.keyCode || 'chưa chọn'}; kiểm tra mã đề trên phiếu.`);
       $('warnings').textContent = messages.join(' ');
     }
@@ -650,15 +710,15 @@ function download(data, filename, type) {
 }
 async function exportReport(type) {
   if (!records.length || G.validateConfig(config()).length) return;
-  const cfg = config(), items = records.map(assess); exporting = true; updateButtons(); $('exportStatus').textContent = 'Đang tạo file…';
+  const cfg = config(), items = records.map(assess); exporting = true; updateButtons(); $('exportMessage').textContent = 'Đang tạo file…';
   try {
     if (type === 'excel') download(Reports.excel(items, cfg), 'ket-qua-diem-thi.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     else if (type === 'summary') download(await Reports.summaryPdf(items, cfg), 'bang-diem-thi.pdf', 'application/pdf');
     else if (type === 'image') download(await Reports.annotatedJpeg(assess(current()), cfg, $('exportQuality').value), 'bai-lam-da-cham.jpg', 'image/jpeg');
     else download(await Reports.annotatedPdf(items, cfg, $('exportQuality').value), 'bai-lam-da-cham.pdf', 'application/pdf');
     const unfinished = items.filter(item => !item.result?.scores).length;
-    $('exportStatus').textContent = `Đã xuất ${type === 'image' ? 1 : items.length} bài / trang${unfinished ? `; ${unfinished} bài chưa chấm được ghi rõ trạng thái trong file` : ''}.`;
-  } catch (error) { $('exportStatus').textContent = 'Không xuất được file: ' + error.message; }
+    $('exportMessage').textContent = `Đã xuất ${type === 'image' ? 1 : items.length} bài / trang${unfinished ? `; ${unfinished} bài chưa chấm được ghi rõ trạng thái trong file` : ''}.`;
+  } catch (error) { $('exportMessage').textContent = 'Không xuất được file: ' + error.message; }
   finally { exporting = false; updateButtons(); }
 }
 $('exportImage').onclick = () => exportReport('image');

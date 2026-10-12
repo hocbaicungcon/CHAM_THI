@@ -126,3 +126,18 @@ test('folded lower-left corner on first seventh PDF sheet uses a multi-marker fi
   }
  }finally{fs.rmSync(folder,{recursive:true,force:true});}
 });
+test('local three-code image uses four observed corners without warped recovery and reads six ID digits / three code digits',{skip:!fs.existsSync(path.resolve(__dirname,'../data/anh_goc_test.jpg'))},t=>{
+ const folder=fs.mkdtempSync(path.join(os.tmpdir(),'chamtn-three-'));
+ try {
+  const png=path.join(folder,'source.png'),conversion=spawnSync('sips',['-s','format','png',path.resolve(__dirname,'../data/anh_goc_test.jpg'),'--out',png]);
+  if(conversion.error)return t.skip('Image converter unavailable');assert.equal(conversion.status,0);
+  const image=readPng(png),aligned=O.autoAlign(image);
+  assert.ok(aligned);assert.equal(aligned.profile,'standard3');assert.equal(aligned.support,1);assert.equal(aligned.recoveredCorner,undefined);
+  assert.ok(Math.abs(aligned.markers[1].x-881.5)<2);assert.ok(Math.abs(aligned.markers[1].y-33)<2);
+  const blank=O.recognize(image,aligned.points,aligned.profile);assert.ok(blank.answers.p1.every(v=>!v));
+  const dot=(x,y)=>{for(let yy=Math.floor(y-6);yy<=y+6;yy++)for(let xx=Math.floor(x-6);xx<=x+6;xx++)if((xx-x)**2+(yy-y)**2<=36){const k=(yy*image.width+xx)*4;image.data[k]=image.data[k+1]=image.data[k+2]=20;}};
+  for(let i=0;i<6;i++)dot(687+18.3*i,126+26.2*(i+1));
+  for(let i=0;i<3;i++)dot(823+18.2*i,126+26.2*(i+1));
+  const filled=O.recognize(image,aligned.points,aligned.profile);assert.equal(filled.metadata.studentId,'123456');assert.equal(filled.metadata.examCode,'123');assert.equal(filled.metadata.examUncertain,false);
+ }finally{fs.rmSync(folder,{recursive:true,force:true});}
+});

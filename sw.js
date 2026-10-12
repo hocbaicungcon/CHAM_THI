@@ -1,5 +1,5 @@
 'use strict';
-const CACHE='chamtn-offline-v15';
+const CACHE='chamtn-offline-v18';
 self.addEventListener('install',event=>event.waitUntil((async()=>{
  const assets=await (await fetch(new URL('offline-assets.json',self.registration.scope),{cache:'no-store'})).json();
  const cache=await caches.open(CACHE);await cache.addAll(assets.map(asset=>new URL(asset,self.registration.scope).href));

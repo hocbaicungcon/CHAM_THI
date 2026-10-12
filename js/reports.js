@@ -87,12 +87,12 @@
     for (let n = 0; n < totalPages; n++) {
       const canvas = document.createElement('canvas'); canvas.width = 1240; canvas.height = 1754;
       const ctx = canvas.getContext('2d'); ctx.fillStyle = 'white'; ctx.fillRect(0, 0, 1240, 1754);
-      ctx.fillStyle = '#123d35'; ctx.fillRect(40, 40, 1160, 125);
+      ctx.fillStyle = '#123c4b'; ctx.fillRect(40, 40, 1160, 125);
       text(ctx, 'KẾT QUẢ CHẤM TRẮC NGHIỆM', 65, 91, 36, 'white', true);
       text(ctx, `Phần I: ${config.parts[0].count} câu · Phần II: ${config.parts[1].count} câu · Phần III: ${config.parts[2].count} câu`, 65, 132, 24, '#cbe5d7');
       text(ctx, `Thang điểm: ${fmt(config.parts.reduce((sum, part) => sum + G.maximum(part), 0))} · ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`, 50, 207, 22);
       const xs = [50, 105, 510, 665, 785, 900, 1015, 1125];
-      ['STT', 'Bài làm / Trạng thái', 'SBD', 'Mã đề', 'Phần I', 'Phần II', 'Phần III', 'Tổng'].forEach((label, i) => text(ctx, label, xs[i], 266, 21, '#147d64', true));
+      ['STT', 'Bài làm / Trạng thái', 'SBD', 'Mã đề', 'Phần I', 'Phần II', 'Phần III', 'Tổng'].forEach((label, i) => text(ctx, label, xs[i], 266, 21, '#087e9a', true));
       const pageItems = items.slice(n * perPage, (n + 1) * perPage);
       pageItems.forEach((item, i) => {
         const y = 294 + i * 76;
@@ -103,7 +103,7 @@
         fitted(ctx, item.record.studentId || '—', xs[2], y + 15, 145, 21);
         fitted(ctx, item.record.keyCode || item.record.examCode || '—', xs[3], y + 15, 100, 21);
         for (let part = 0; part < 3; part++) text(ctx, item.result?.scores ? fmt(item.result.scores[part]) : '—', xs[part + 4], y + 15, 22);
-        text(ctx, item.result?.scores ? fmt(item.result.total) : '—', xs[7], y + 15, 23, '#147d64', true);
+        text(ctx, item.result?.scores ? fmt(item.result.total) : '—', xs[7], y + 15, 23, '#087e9a', true);
       });
       text(ctx, `Trang ${n + 1}/${totalPages} · CHẤM TN`, 50, 1705, 20, '#758479'); pages.push(canvas);
     }
@@ -144,7 +144,7 @@
             }
           }
         } else {
-          const standard = r.profile === 'standard';
+          const standard = r.profile === 'standard' || r.profile === 'standard3';
           const x = standard ? (128 + i * 163.8) * 1229 / 1241 : 74 + i * 177.5;
           const top = standard ? 1218 : 1228, bottom = standard ? 1615 : 1669;
           // Mark the physical digit columns, including leading empty columns.
@@ -173,12 +173,13 @@
         }
       }
     }
+    sheetCtx.save(); sheetCtx.font = '16px Arial, sans-serif'; sheetCtx.textAlign = 'center'; sheetCtx.fillStyle = '#52636b'; sheetCtx.fillText('Chấm bài miễn phí tại https://giasu.ai.vn', sheet.width / 2, 1741); sheetCtx.restore();
     const canvas = document.createElement('canvas'); canvas.width = 1229; canvas.height = 1934;
-    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#f4faf5'; ctx.fillRect(0, 0, 1229, 180); ctx.drawImage(sheet, 0, 180);
-    text(ctx, 'PHIẾU ĐÃ CHẤM · CHẤM TN', 28, 36, 30, '#123d35', true);
+    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#edf8fc'; ctx.fillRect(0, 0, 1229, 180); ctx.drawImage(sheet, 0, 180);
+    text(ctx, 'PHIẾU ĐÃ CHẤM · CHẤM TN', 28, 36, 30, '#123c4b', true);
     fitted(ctx, `${r.label} · SBD: ${r.studentId || '—'} · Mã đề: ${r.keyCode || r.examCode || '—'}`, 28, 67, 1170, 22);
     if (item.result?.scores) {
-      text(ctx, `${item.result.warnings.length ? 'Điểm tạm tính' : 'Tổng điểm'}: ${fmt(item.result.total)}/${fmt(item.result.maxima.reduce((sum, v) => sum + v, 0))}`, 28, 112, 31, '#147d64', true);
+      text(ctx, `${item.result.warnings.length ? 'Điểm tạm tính' : 'Tổng điểm'}: ${fmt(item.result.total)}/${fmt(item.result.maxima.reduce((sum, v) => sum + v, 0))}`, 28, 112, 31, '#087e9a', true);
       text(ctx, `Phần I: ${fmt(item.result.scores[0])}/${fmt(item.result.maxima[0])}    Phần II: ${fmt(item.result.scores[1])}/${fmt(item.result.maxima[1])}    Phần III: ${fmt(item.result.scores[2])}/${fmt(item.result.maxima[2])}`, 465, 109, 23);
     } else fitted(ctx, item.status, 28, 111, 1170, 28, '#bb3434');
     text(ctx, 'Vòng xanh: đúng · Vòng đỏ: sai · Vòng vàng: đáp án đúng', 28, 148, 21);

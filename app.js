@@ -2,6 +2,7 @@
 const $ = id => document.getElementById(id);
 const G = window.ChamTNGrading, OMR = window.ChamTNOMR, Inputs = window.ChamTNInputs, Reports = window.ChamTNReports;
 const canvas = $('photo'), ctx = canvas.getContext('2d');
+const cornerHistory = new window.ChamTNCornerEditor.History();
 const names = ['I', 'II', 'III'];
 const storedIds = ['key1', 'key2', 'key3', 'n1', 'n2', 'n3', 'w1', 'w2', 'w3', 'mode1', 'mode2', 'mode3', 'rule2', 'level1', 'level2', 'level3', 'level4', 'cameraPreviewSeconds', 'exportQuality'];
 let records = [], activeId = '', exams = [], preferredCode = '', nextId = 0, loadVersion = 0, importingVersion = 0;
@@ -69,7 +70,9 @@ function updateButtons() {
   const r = current(), errors = G.validateConfig(config());
   $('analyze').disabled = !r || r.points.length !== 4 || errors.length > 0 || !config().parts.some(p => p.count > 0) || loading;
   $('viewAnnotated').disabled = !r?.answers;
-  $('resetCorners').disabled = !r || loading; $('clearBatch').disabled = !records.length && !clearFailed || exporting;
+  $('resetCorners').disabled = !r || loading;
+  $('undoCorners').classList.toggle('hidden', !cornerHistory.active(r)); $('cancelCorners').classList.toggle('hidden', !cornerHistory.active(r));
+  $('undoCorners').disabled = !cornerHistory.canUndo(r) || loading; $('cancelCorners').disabled = !r || loading; $('clearBatch').disabled = !records.length && !clearFailed || exporting;
   $('newBatch').disabled = !records.length && !clearFailed || exporting;
   $('export').disabled = !r?.answers || errors.length > 0;
   for (const id of ['exportExcel', 'exportSummaryPdf', 'exportAnnotatedPdf', 'exportImage']) $(id).disabled = !records.length || !!errors.length || loading || exporting;
@@ -85,6 +88,7 @@ function updateConfiguration() {
     $('hint' + (i + 1)).textContent = hint;
   });
   $('examSummary').textContent = errors.length ? 'Cấu hình chưa hợp lệ' : `${cfg.parts.reduce((sum, p) => sum + p.count, 0)} câu · ${format(cfg.parts.reduce((sum, p) => sum + G.maximum(p), 0), 5)} điểm`;
+  renderKeyRows();
   if (current()?.answers) renderAnswers(); refresh();
 }
 for (const id of storedIds) $(id).addEventListener('input', () => {
@@ -97,6 +101,7 @@ for (const id of storedIds) $(id).addEventListener('input', () => {
   if (id.startsWith('key')) {
     const code = $('examSelect').value || preferredCode, draftCode = Inputs.matchingCode(exams,$('manualCode').value.trim()) || $('manualCode').value.trim().padStart(3,'0'), exam = exams.find(e => e.code === code);
     if (exam && (! $('manualCode').value.trim() || draftCode === code)) { exam.keys = keys(); persist('exams', JSON.stringify(exams)); }
+    if (!editingKeyRow) renderKeyRows();
     refresh();
   } else updateConfiguration();
 });
@@ -104,6 +109,48 @@ function renderExamPicker() {
   $('examPicker').classList.toggle('hidden', !exams.length); $('examSelect').replaceChildren();
   const placeholder = document.createElement('option'); placeholder.value = ''; placeholder.textContent = 'Chọn mã đề'; $('examSelect').appendChild(placeholder);
   for (const exam of exams.slice().sort((a, b) => Number(a.code) - Number(b.code))) { const option = document.createElement('option'); option.value = exam.code; option.textContent = `Mã đề ${exam.code}`; $('examSelect').appendChild(option); }
+}
+let editingKeyRow = false;
+function renderKeyRows() {
+  const parsed = keys();
+  for (let part = 1; part <= 3; part++) {
+    const values = parsed['p' + part], host = $('keyRows' + part); host.replaceChildren();
+    for (let q = 0; q < Math.max(count(part - 1), values.length); q++) {
+      const row = document.createElement('div'); row.className = 'key-row';
+      const label = document.createElement('span'); label.className = 'key-question'; label.textContent = 'Câu ' + (q + 1); row.append(label);
+      const commit = value => {
+        const latest = keys()['p' + part];
+        while (latest.length <= q) latest.push(part === 2 ? ['?','?','?','?'] : '?');
+        latest[q] = value;
+        $('key' + part).value = part === 2 ? latest.map(v => v.join('')).join('\n') : latest.join('\n');
+        editingKeyRow = true; $('key' + part).dispatchEvent(new Event('input', { bubbles: true })); editingKeyRow = false;
+      };
+      if (part === 2) {
+        const group = document.createElement('div'); group.className = 'key-tf';
+        for (let idea = 0; idea < 4; idea++) {
+          const select = document.createElement('select'); select.setAttribute('aria-label', `Phần II câu ${q + 1} ý ${'abcd'[idea]}`);
+          for (const value of ['', 'Đ', 'S', 'O', 'X']) { const option = document.createElement('option'); option.value = value; option.textContent = 'abcd'[idea] + ': ' + (value || '—'); select.append(option); }
+          select.value = values[q]?.[idea] === '?' ? '' : values[q]?.[idea] || '';
+          select.onchange = () => { const next = Array.from({length:4}, (_, i) => keys().p2[q]?.[i] || '?'); next[idea] = select.value || '?'; commit(next); }; group.append(select);
+        }
+        row.append(group);
+      } else {
+        const input = document.createElement('input'); input.type = 'text'; input.value = values[q] === '?' ? '' : values[q] || ''; input.autocomplete = 'off';
+        input.setAttribute('aria-label', `Phần ${names[part - 1]} câu ${q + 1}`); input.placeholder = part === 1 ? 'A / AB / O / X' : 'Số / O / X';
+        input.oninput = () => commit((part === 1 ? input.value.replace(/[\s,;]+/g, '') : input.value.trim()).toUpperCase() || '?'); row.append(input);
+        if (part === 1) {
+          const choices = document.createElement('div'); choices.className = 'key-choices';
+          for (const value of ['A','B','C','D','O','X']) {
+            const button = document.createElement('button'); button.type = 'button'; button.textContent = value;
+            const update = () => { for (const b of choices.children) b.setAttribute('aria-pressed', String(input.value.includes(b.textContent))); };
+            button.onclick = () => { const old = input.value; input.value = 'OX'.includes(value) ? value : [...'ABCD'].filter(v => v === value ? !old.includes(v) : old.includes(v)).join(''); commit(input.value || '?'); update(); }; choices.append(button); update();
+          }
+          input.addEventListener('input', () => { for (const b of choices.children) b.setAttribute('aria-pressed', String(input.value.includes(b.textContent))); }); row.append(choices);
+        }
+      }
+      host.append(row);
+    }
+  }
 }
 function showKeys(code) {
   if (!exams.length) { $('examInfo').textContent = ''; return; }
@@ -114,6 +161,7 @@ function showKeys(code) {
     $('key' + (i + 1)).value = i === 0 ? values.join(' ') : i === 1 ? values.map(row => row.join(' ')).join('\n') : values.join('\n');
     save('key' + (i + 1));
   }
+  renderKeyRows();
   $('examInfo').textContent = exam ? `Mã đề ${exam.code}: ${exam.keys.p1.length} câu I · ${exam.keys.p2.length} câu II · ${exam.keys.p3.length} câu III. Có thể sửa đáp án bên dưới.` : 'Mã đề nhận dạng chưa có trong bộ đáp án. Chọn mã đề để chấm bài đang xem.';
 }
 function chooseKey(record) {
@@ -349,14 +397,21 @@ $('newBatch').onclick = clearGradedData;
 canvas.onclick = event => {
   const r = current(); if (!r) return;
   if (annotatedView && r.answers) { paperViewer.open(r.id); return; }
+  cornerHistory.push(r, annotatedView);
   if (r.points.length === 4) r.points = [];
   const bounds = canvas.getBoundingClientRect(); r.points.push({ x: (event.clientX - bounds.left) * canvas.width / bounds.width, y: (event.clientY - bounds.top) * canvas.height / bounds.height });
   r.autoAligned = false; r.answers = null; r.flags = null; r.error = ''; $('scanError').textContent = ''; refresh(); draw();
 };
-$('resetCorners').onclick = () => { const r = current(); if (!r) return; r.points = []; r.answers = null; r.flags = null; r.autoAligned = false; annotatedView = false; refresh(); draw(); };
+$('resetCorners').onclick = () => { const r = current(); if (!r) return; cornerHistory.push(r, annotatedView); r.points = []; r.answers = null; r.flags = null; r.autoAligned = false; annotatedView = false; refresh(); draw(); };
+function restoreCornerEdit(cancel) {
+  const r = current(); if (!r) return; const view = cancel ? cornerHistory.cancel(r) : cornerHistory.undo(r);
+  if (view === null) return; selectRecord(r.id); annotatedView = view; $('scanError').textContent = r.error || ''; refresh(); draw();
+}
+$('undoCorners').onclick = () => restoreCornerEdit(false);
+$('cancelCorners').onclick = () => restoreCornerEdit(true);
 $('analyze').onclick = () => {
   const r = current(); if (!r) return;
-  try { recognizeRecord(r); selectRecord(r.id); if (assess(r).result?.scores) soundGraded(); }
+  try { recognizeRecord(r); cornerHistory.commit(r); selectRecord(r.id); if (assess(r).result?.scores) soundGraded(); }
   catch (error) { r.error = error.message; $('scanError').textContent = 'Không thể đọc phiếu: ' + error.message; }
 };
 $('viewAnnotated').onclick = () => { annotatedView = !annotatedView; draw(); saveSession(); };

@@ -112,3 +112,17 @@ test('local seventh PDF recovers the obscured corner and reads strong fills besi
   }
  }finally{fs.rmSync(folder,{recursive:true,force:true});}
 });
+
+test('folded lower-left corner on first seventh PDF sheet uses a multi-marker fit at both import sizes',{skip:!fs.existsSync(path.resolve(__dirname,'../data/bai-lam-da-cham 7.pdf'))},t=>{
+ if(spawnSync('pdftoppm',['-v']).error)return t.skip('Poppler unavailable');
+ const folder=fs.mkdtempSync(path.join(os.tmpdir(),'chamtn-folded-'));
+ try{
+  for(const size of [1697,2200]){
+   const prefix=path.join(folder,'fold'+size),render=spawnSync('pdftoppm',['-f','1','-l','1','-scale-to',String(size),'-singlefile','-png',path.resolve(__dirname,'../data/bai-lam-da-cham 7.pdf'),prefix]);assert.equal(render.status,0);
+   const image=readPng(prefix+'.png'),aligned=O.autoAlign(image);assert.ok(aligned?.multiMarkerFit);assert.equal(aligned.recoveredCorner,3);assert.equal(aligned.support,1);
+   const rms=Math.sqrt(aligned.adjustments.reduce((sum,m)=>sum+m.dx*m.dx+m.dy*m.dy,0)/aligned.adjustments.length);assert.ok(rms<1.6,`size ${size}: residual ${rms}`);
+   const result=O.recognize(image,aligned.points,aligned.profile);assert.equal(result.answers.p1.slice(0,12).join(''),'CBCCBDACDCBC');assert.deepEqual(result.answers.p2.slice(0,2),[['Đ','Đ','S','Đ'],['Đ','S','S','Đ']]);
+   assert.deepEqual(result.answers.p3.slice(2,4),['106','460']);assert.match(result.flags.p3[0],/Kiểm tra/);
+  }
+ }finally{fs.rmSync(folder,{recursive:true,force:true});}
+});

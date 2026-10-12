@@ -178,3 +178,12 @@ Nếu lượt dò mốc thông thường không đủ tin cậy, bộ căn chỉ
 ## Chia sẻ đáp án bằng QR
 
 Máy tính dùng **Tạo ảnh QR**: tạo toàn bộ bộ đáp án hoặc chỉ mã đề đang chọn, đặt `logo.svg` ở giữa và tải ảnh PNG. QR dùng mức sửa lỗi H; web tự đọc lại ảnh có logo, chỉ cho tải khi dữ liệu đúng. Bộ lớn được chia nhiều QR. Trên mobile, **Nhập ảnh QR** mở lựa chọn chụp camera sau hoặc thư viện ảnh. Nhập QR bổ sung/cập nhật mã đề vào bộ hiện có, để nhập lần lượt đủ các QR; mã đề cùng số nhưng khác số 0 đầu được coi là cùng mã. Thư viện tạo QR, giải mã và logo đều được lưu ngoại tuyến cùng web.
+
+
+## Chỉnh góc có Undo / Hủy
+
+Khi bấm **Đặt lại góc** hoặc chọn góc trên ảnh gốc, **Undo** quay lại từng bước; **Hủy căn góc** khôi phục vị trí, đáp án, trạng thái nhận dạng và bài đã chấm trước khi chỉnh. Lịch sử chỉnh góc được lưu cùng bản lưu tạm, nên có thể Undo/Hủy sau refresh. Đọc ô tô thành công sẽ xác nhận góc mới và kết thúc lịch sử chỉnh.
+
+Với góc giấy bị gập, không chỉ khôi phục từ một mốc phụ: web tinh chỉnh phép chiếu bằng ba góc rõ và nhiều mốc phụ phân bố trên phiếu, loại mốc lệch khỏi nhóm, rồi kiểm tra lại độ khớp. Nếu chấm góc chỉ còn mảnh đen nhỏ (kích thước dưới 80% trung vị các góc), web cũng thử tinh chỉnh bằng các mốc còn nguyên. Chỉ nhận kết quả tinh chỉnh khi không giảm số mốc khớp và không làm sai lệch các góc rõ. Đã kiểm tra riêng trang đầu PDF số 7 ở cạnh dài 1697 / 2200 px; các số bị màu đánh dấu che vẫn giữ cảnh báo cần kiểm tra.
+
+- Sửa đáp án theo từng mã đề: mỗi dòng có số câu trên máy tính; điện thoại có nút A/B/C/D/O/X và ô chọn từng ý Đ/S/O/X. Có thể mở “Nhập / dán nhiều đáp án” để nhập hàng loạt. Ô chưa nhập giữ đúng vị trí câu và báo thiếu đáp án.

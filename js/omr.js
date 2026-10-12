@@ -55,6 +55,18 @@
       return p;
     };
   }
+  // Fit several observed marks together. Normalized coordinates keep the
+  // least-squares system stable for low-resolution previews and large photos.
+  function fitMarks(observations, width, height) {
+    const matrix=Array.from({length:8},()=>Array(8).fill(0)),vector=Array(8).fill(0);
+    for(const mark of observations){
+      const x=mark.x/template.width,y=mark.y/template.height,u=mark.u/width,v=mark.v/height,weight=mark.weight||1;
+      for(const [row,value] of [[[x,y,1,0,0,0,-x*u,-y*u],u],[[0,0,0,x,y,1,-x*v,-y*v],v]])
+        for(let i=0;i<8;i++){vector[i]+=row[i]*value*weight;for(let j=0;j<8;j++)matrix[i][j]+=row[i]*row[j]*weight;}
+    }
+    const h=solve(matrix,vector);
+    return (x,y)=>{x/=template.width;y/=template.height;const d=h[6]*x+h[7]*y+1;return {x:width*(h[0]*x+h[1]*y+h[2])/d,y:height*(h[3]*x+h[4]*y+h[5])/d};};
+  }
   function detector(imageData, points) {
     const { data, width, height } = imageData, map = project(points);
     const sample = (x, y) => {
@@ -258,7 +270,16 @@
     const standardAnchors = [[76,76],[1162,76],[1162,1678],[76,1678]].map(([x,y])=>[x*1229/1241,y]);
     const standardTiming = [[811,76],[76,550],[806,550],[1162,550],[1032,348],[1032,519],[364,628],[620,628],[875,628],[364,932],[620,932],[875,932],[364,975],[620,975],[875,975],[364,1155],[620,1155],[875,1155],[292,1178],[455,1178],[783,1178],[947,1178],[292,1638],[455,1638],[620,1638],[783,1638],[947,1638]].map(([x,y])=>[x*1229/1241,y]);
     const layouts = [{profile:'youngmix',anchors,timing},{profile:'standard',anchors:standardAnchors,timing:standardTiming}];
-    const finish = result => {
+    const finish = initialResult => {
+      let result = initialResult;
+      if (result && result.recoveredCorner === undefined && result.support >= .9) {
+        const sizes=result.markers.map(marker=>marker.size).sort((a,b)=>a-b),median=(sizes[1]+sizes[2])/2;
+        const weak=result.markers.findIndex(marker=>marker.size<median*.8);
+        const layout=layouts.find(layout=>layout.profile===result.profile);
+        // A partly folded square can leave a small, displaced black fragment.
+        // Estimate that corner from the intact corners and distributed marks.
+        if(weak>=0&&layout)result=refineRecovery(result,weak,layout,result.rotation);
+      }
       if(result && result.adjustments.some(m=>Math.hypot(m.dx,m.dy)>1.5))result.points.adjustments=[...result.adjustments,...result.anchors.map(([x,y])=>({x,y,dx:0,dy:0}))];
       return result;
     };
@@ -285,9 +306,29 @@
         const support=matches.length/layout.timing.length;
         if(matches.length<8||support<.6)return null;
         const score=support+area/(width*height)*.08+quad.reduce((sum,p)=>sum+p.fill,0)*.025-(ratio-1)*.12;
-        return {score,support,profile:layout.profile,markers:quad.map(p=>({x:p.x,y:p.y,size:p.size})),points:[[0,0],[1229,0],[1229,1754],[0,1754]].map(([x,y])=>map(x,y)),rotation,anchors:layout.anchors,auxMarkers:matches.map(m=>m.marker),adjustments:matches.map(m=>({x:m.x,y:m.y,dx:m.marker.x-map(m.x,m.y).x,dy:m.marker.y-map(m.x,m.y).y}))};
+        return {score,support,profile:layout.profile,markers:quad.map(p=>({x:p.x,y:p.y,size:p.size,fill:p.fill})),points:[[0,0],[1229,0],[1229,1754],[0,1754]].map(([x,y])=>map(x,y)),rotation,anchors:layout.anchors,auxMarkers:matches.map(m=>m.marker),adjustments:matches.map(m=>({x:m.x,y:m.y,dx:m.marker.x-map(m.x,m.y).x,dy:m.marker.y-map(m.x,m.y).y}))};
       } catch(_){return null;}
     };
+    const refineRecovery=(result,mi,layout,rotation)=>{
+      if(!result)return result;
+      try{
+        const initial=project(result.markers,layout.anchors),observations=[];
+        result.markers.forEach((p,i)=>{if(i!==mi)observations.push({x:layout.anchors[i][0],y:layout.anchors[i][1],u:p.x,v:p.y,weight:4});});
+        result.adjustments.forEach(m=>{const p=initial(m.x,m.y);observations.push({x:m.x,y:m.y,u:p.x+m.dx,v:p.y+m.dy});});
+        let map=fitMarks(observations,width,height);
+        const residual=m=>{const p=map(m.x,m.y);return Math.hypot(p.x-m.u,p.y-m.v);};
+        const errors=observations.slice(3).map(residual).sort((a,b)=>a-b),limit=Math.max(2,errors[Math.floor(errors.length/2)]*2.5);
+        const inliers=observations.filter((m,i)=>i<3||residual(m)<=limit);
+        if(inliers.length>=15)map=fitMarks(inliers,width,height);
+        const fitted=layout.anchors.map(([x,y],i)=>({...result.markers[i],...map(x,y),fill:quadFill(result.markers[i])}));
+        if(fitted.some((p,i)=>i!==mi&&Math.hypot(p.x-result.markers[i].x,p.y-result.markers[i].y)>Math.max(2,result.markers[i].size*.2)))return result;
+        const refined=evaluate(fitted,layout,rotation);
+        const rms=r=>Math.sqrt(r.adjustments.reduce((sum,m)=>sum+m.dx*m.dx+m.dy*m.dy,0)/r.adjustments.length);
+        if(!refined||refined.support<result.support||rms(refined)>rms(result))return result;
+        refined.recoveredCorner=mi;refined.markers[mi].inferred=true;refined.multiMarkerFit=true;return refined;
+      }catch(_){return result;}
+    };
+    const quadFill=p=>p.fill||.9;
     const recover=(quad,mi,layout,rotation)=>{
       const size=quad[mi].size;let best=null;
       let guess;try{guess=project(quad,layout.anchors);}catch(_){return null;}
@@ -310,11 +351,11 @@
             if(Math.max(...xs)-Math.min(...xs)<template.width*.5||Math.max(...ys)-Math.min(...ys)<template.height*.55)continue;
             result.recoveredCorner=mi;result.markers[mi].inferred=true;
             if(!best||result.score>best.score)best=result;
-            if(result.support===1 && result.adjustments.every(m=>Math.hypot(m.dx,m.dy)<2.5))return result;
+            if(result.support===1 && result.adjustments.every(m=>Math.hypot(m.dx,m.dy)<2.5))return refineRecovery(result,mi,layout,rotation);
           }catch(_){/* A bad hypothesis falls back to the next observed mark. */}
         }
       }
-      return best;
+      return refineRecovery(best,mi,layout,rotation);
     };
     // Validate current components near the previous corners, never reuse stale corners.
     if(previous?.markers?.length===4){

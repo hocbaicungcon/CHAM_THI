@@ -43,7 +43,7 @@
     const settings = [['Phần', 'Số câu', 'Giá trị điểm', 'Cách nhập', 'Điểm tối đa'], ...config.parts.map((part, i) => [['I', 'II', 'III'][i], part.count, part.points, part.mode === 'total' ? 'Tổng điểm phần' : 'Điểm mỗi câu', G.maximum(part)]), [], ['Chấm phần II', { linear: 'Chia đều từng ý', all: 'Đúng đủ 4 ý', levels: 'Theo mức ý đúng' }[config.rule2]], ['Tỷ lệ 1–4 ý (%)', ...config.levels2]];
     const settingsSheet = X.utils.aoa_to_sheet(settings); settingsSheet['!cols'] = Array.from({ length: 5 }, () => ({ wch: 24 }));
     X.utils.book_append_sheet(book, settingsSheet, 'Cấu hình chấm');
-    return X.write(book, { bookType: 'xlsx', type: 'array' });
+    return X.write(book, { bookType: 'xlsx', type: 'array', compression: true });
   }
   function text(ctx, content, x, y, size = 22, color = '#20372d', bold = false) {
     ctx.font = `${bold ? 'bold ' : ''}${size}px Arial, sans-serif`; ctx.fillStyle = color; ctx.fillText(String(content), x, y);
@@ -54,15 +54,33 @@
     if (value !== String(content)) value = value.slice(0, -1) + '…';
     text(ctx, value, x, y, size, color);
   }
-  async function pdfFromCanvases(canvases, title) {
+  const exportPresets = {
+    compact: { edge: 1800, quality: .72 },
+    balanced: { edge: 2200, quality: .82 },
+    clear: { edge: 2600, quality: .92 }
+  };
+  async function encodeCanvas(source, preset = 'compact', lossless = false) {
+    const options = exportPresets[preset] || exportPresets.compact;
+    let canvas = source;
+    const scale = Math.min(1, options.edge / Math.max(source.width, source.height));
+    if (scale < 1 && !lossless) {
+      canvas = document.createElement('canvas'); canvas.width = Math.round(source.width * scale); canvas.height = Math.round(source.height * scale);
+      const ctx = canvas.getContext('2d'); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+    }
+    const blob = await new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('Không nén được ảnh xuất.')), lossless ? 'image/png' : 'image/jpeg', options.quality));
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+  async function pdfFromCanvases(canvases, title, preset = 'compact', lossless = false) {
     const pdf = await root.PDFLib.PDFDocument.create(); pdf.setTitle(title); pdf.setCreator('CHẤM TN');
     for await (const canvas of canvases) {
-      const image = await pdf.embedJpg(canvas.toDataURL('image/jpeg', .94));
+      const bytes = await encodeCanvas(canvas, preset, lossless);
+      const image = lossless ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
       const page = pdf.addPage([595.28, 841.89]), factor = Math.min((page.getWidth() - 20) / canvas.width, (page.getHeight() - 20) / canvas.height);
       const width = canvas.width * factor, height = canvas.height * factor;
       page.drawImage(image, { x: (page.getWidth() - width) / 2, y: (page.getHeight() - height) / 2, width, height });
     }
-    return pdf.save();
+    return pdf.save({ useObjectStreams: true });
   }
   function summaryCanvases(items, config) {
     const pages = [], perPage = 17, totalPages = Math.max(1, Math.ceil(items.length / perPage));
@@ -167,10 +185,11 @@
     fitted(ctx, item.status, 28, 174, 1170, 17, '#7a6843');
     return canvas;
   }
-  async function summaryPdf(items, config) { return pdfFromCanvases(summaryCanvases(items, config), 'Kết quả điểm thi'); }
-  async function annotatedPdf(items, config) {
+  async function summaryPdf(items, config) { return pdfFromCanvases(summaryCanvases(items, config), 'Kết quả điểm thi', 'clear', true); }
+  async function annotatedPdf(items, config, preset = 'compact') {
     async function* pages() { for (const item of items) { yield annotatedCanvas(item, config); await new Promise(resolve => setTimeout(resolve, 0)); } }
-    return pdfFromCanvases(pages(), 'Phiếu trắc nghiệm đã chấm');
+    return pdfFromCanvases(pages(), 'Phiếu trắc nghiệm đã chấm', preset);
   }
-  return { summaryRows, detailRows, excel, summaryCanvases, annotatedCanvas, summaryPdf, annotatedPdf };
+  async function annotatedJpeg(item, config, preset = 'compact') { return encodeCanvas(annotatedCanvas(item, config), preset); }
+  return { summaryRows, detailRows, excel, summaryCanvases, annotatedCanvas, summaryPdf, annotatedPdf, annotatedJpeg, encodeCanvas, exportPresets };
 });

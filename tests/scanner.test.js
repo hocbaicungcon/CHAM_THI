@@ -46,3 +46,9 @@ test('fast cadence still rejects sustained answer changes until reconfirmed',()=
  assert.equal(g.observe(frame('B'),320).ready,false);
  assert.equal(g.observe(frame('B'),400).ready,true);
 });
+
+test('low resolution frames need five matching reads over at least 240ms',()=>{
+ const gate=new ScanGate(),f={...frame(),lowResolution:true};
+ for(const time of [0,60,120,180])assert.equal(gate.observe(f,time).ready,false);
+ assert.equal(gate.observe(f,240).ready,true);gate.accept(f,240);assert.equal(gate.observe(f,600).reason,'duplicate');
+});

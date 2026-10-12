@@ -191,7 +191,7 @@
   function recognize(imageData, points, profile) { return read(detector(imageData, points), profile); }
 
   // Find the four square registration marks. Timing marks resolve page rotation.
-  function autoAlign(imageData, previous = null) {
+  function autoAlign(imageData, previous = null, faintPass = false) {
     const { width, height, data } = imageData, step = Math.max(1, Math.ceil(Math.max(width, height) / 1000));
     const w = Math.ceil(width / step), h = Math.ceil(height / step), mask = new Uint8Array(w * h);
     const radius = Math.max(12, Math.min(width, height) * 20 / 1229);
@@ -208,7 +208,8 @@
       let a=light(x-radius,y), bb=light(x+radius,y), c=light(x,y-radius), d=light(x,y+radius);
       if(a>bb)[a,bb]=[bb,a]; if(c>d)[c,d]=[d,c];
       const paper = Math.min(Math.max(a,c),Math.min(bb,d));
-      return .2126 * r + .7152 * g + .0722 * b < Math.min(195, paper - Math.max(30, paper * .2)) && (Math.max(r, g, b) - Math.min(r, g, b) < 90 || Math.max(r, g, b) < 90);
+      const threshold = faintPass ? Math.min(235, paper - Math.max(14, paper * .09)) : Math.min(195, paper - Math.max(30, paper * .2));
+      return .2126 * r + .7152 * g + .0722 * b < threshold && (Math.max(r, g, b) - Math.min(r, g, b) < 90 || Math.max(r, g, b) < 90);
     };
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) mask[y * w + x] = dark(x * step, y * step) ? 1 : 0;
     const queue = new Int32Array(w * h), candidates = [], landmarks = [];
@@ -231,7 +232,7 @@
         let sx = 0, sy = 0, pixels = 0;
         for (let yy = Math.max(0,(minY-1)*step); yy <= Math.min(height-1,(maxY+1)*step); yy++)
           for (let xx = Math.max(0,(minX-1)*step); xx <= Math.min(width-1,(maxX+1)*step); xx++)
-            if (dark(xx,yy) && light(xx,yy)<128) { sx += xx; sy += yy; pixels++; }
+            if (dark(xx,yy) && (faintPass || light(xx,yy)<128)) { sx += xx; sy += yy; pixels++; }
         const component = {x:pixels?sx/pixels:sumX*step/tail,y:pixels?sy/pixels:sumY*step/tail,size:pixels?Math.sqrt(pixels):Math.sqrt(tail)*step,fill:tail/(cw*ch)};
         if(component.fill>.5)landmarks.push(component);
         if(ratio>.55&&ratio<1.8)candidates.push(component);
@@ -325,7 +326,7 @@
       });
       if(layout&&nearby.every(Boolean)&&new Set(nearby).size===4){
         const result=evaluate(nearby,layout,previous.rotation);
-        if(result?.support>=.7){result.tracked=true;return finish(result);}
+        if(result?.support>=(faintPass ? .8 : .7)){result.tracked=true;return finish(result);}
       } else if(layout && nearby.filter(Boolean).length===3 && new Set(nearby.filter(Boolean)).size===3){
         const missing=nearby.findIndex(p=>!p),next=nearby[(missing+1)%4],opposite=nearby[(missing+2)%4],last=nearby[(missing+3)%4];
         nearby[missing]={x:next.x+last.x-opposite.x,y:next.y+last.y-opposite.y,size:(next.size+opposite.size+last.size)/3,fill:(next.fill+opposite.fill+last.fill)/3};
@@ -363,7 +364,12 @@
         }
       }
     }
-    return finish(best);
+    if (!faintPass && (!best || best.support < .8)) {
+      const soft = autoAlign(imageData, previous, true);
+      if (soft && (!best || soft.support > best.support)) return { ...soft, faintMarkers: true };
+    }
+    // Low contrast candidates require broad agreement with the timing marks.
+    return finish(faintPass && best?.support < .8 ? null : best);
   }
 
   function rectify(imageData, points, outputWidth = 1229) {

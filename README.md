@@ -2,11 +2,11 @@ Web sử dụng trực tiếp: https://hocbaicungcon.github.io/CHAM_THI/
 
 # Chấm phiếu trắc nghiệm trên GitHub Pages
 
-Web tĩnh chạy hoàn toàn trong trình duyệt, dựa trên `template/PHIEU_CHAM_TN.png`. Nhận bài từ ảnh, PDF nhiều trang hoặc camera điện thoại; nhập đáp án từ Excel/ảnh QR; tự căn chỉnh và chấm; xuất bảng điểm Excel/PDF và PDF bài làm đã đánh dấu.
+Web tĩnh chạy hoàn toàn trong trình duyệt, dựa trên `template/PHIEU_CHAM_TN.png`. Nhận bài từ ảnh, PDF nhiều trang hoặc camera điện thoại; nhập đáp án từ Excel/PDF/Word/ảnh QR; tự căn chỉnh và chấm; xuất bảng điểm Excel/PDF và PDF bài làm đã đánh dấu.
 
 ## Cách sử dụng
 
-1. **Nhập đáp án** bằng nút **Nhập Excel** hoặc **Nhập ảnh QR**. Hai file mẫu trong `template/` dùng được trực tiếp. Cũng có thể nhập/sửa đáp án bằng các ô văn bản.
+1. **Nhập đáp án** bằng nút **Nhập Excel**, **Nhập PDF / Word** hoặc **Nhập ảnh QR** trên mobile. Các file mẫu trong `template/` dùng được trực tiếp; máy tính có nút **Tạo ảnh QR** để chia sẻ đáp án. Cũng có thể nhập/sửa đáp án bằng các ô văn bản.
 2. **Chọn số câu và thang điểm** từng phần. Khi nhập file đáp án, số câu được cập nhật theo những câu có đáp án; thang điểm giữ theo cấu hình đang dùng.
 3. **Tải bài làm** qua **Chọn ảnh / PDF**. Có thể chọn nhiều file cùng lúc. Mỗi trang PDF trở thành một bài trong danh sách. Các lần tải tiếp theo thêm bài vào danh sách hiện tại.
 4. Web **tự tìm bốn mốc vuông đen**, nhận hướng phiếu, căn phối cảnh và đọc các ô tô ngay khi tải xong. SBD và mã đề được đọc từ ô số; mã đề sẽ khớp với bộ đáp án đã nhập. Ví dụ mã `0101` trên phiếu khớp mã `101` trong mẫu.
@@ -161,3 +161,20 @@ chữ số; vòng đánh dấu chữ số trên bài chấm dùng cùng quy tắ
 đã chấm, các nét xanh/đỏ của vòng đánh dấu được loại khỏi vùng đo, đọc các pixel
 chì còn lại. Quy tắc này hướng tới bài dùng chì/mực tối, không phải phiếu tô
 bằng các màu đánh dấu của ứng dụng.
+
+
+## Nhập đáp án PDF / Word
+
+Nút **Nhập PDF / Word** đọc PDF có lớp văn bản và tài liệu Word `.docx`, hoàn toàn cục bộ. Hỗ trợ bảng mã đề theo cột, bảng đúng/sai viết liền hoặc từng ý a–d, bảng hai mã đề đặt cạnh nhau, bảng nối qua trang và cột đề GỐC (mã 000). Đã đối chiếu cả năm mẫu trong `template/Dap an`. PDF chỉ có ảnh chưa hỗ trợ đọc đáp án tự động; tài liệu `.doc` cần lưu lại thành `.docx`. Thang điểm vẫn theo cấu hình của người dùng. Đáp án thiếu, trùng khác nhau hoặc sai cấu trúc sẽ báo lỗi và giữ bộ đáp án đang dùng.
+
+## Xuất ảnh / PDF nhỏ gọn
+
+Chọn **Nhỏ gọn**, **Cân bằng** hoặc **Ưu tiên nét rõ** ở phần Kết quả. Mặc định ảnh bài chấm dùng JPEG chất lượng 0,72, cạnh dài tối đa 1800 px; các mức còn lại dùng 0,82 / 2200 px và 0,92 / 2600 px, không phóng lớn ảnh. PDF bài chấm dùng cùng ảnh nén, xử lý từng trang và tránh chuỗi base64 lớn. PDF bảng điểm dùng ảnh PNG không mất chi tiết chữ; Excel bật nén ZIP. Nút **Xuất ảnh bài đang xem** tải JPEG có điểm và đánh dấu đáp án. Việc nén chỉ áp dụng file xuất, không giảm chất lượng ảnh nhận dạng hoặc ảnh gốc đã lưu.
+
+## Mốc mờ và camera thấp nét
+
+Nếu lượt dò mốc thông thường không đủ tin cậy, bộ căn chỉnh thử ngưỡng tương phản thấp và yêu cầu ít nhất 80% mốc phụ khớp hình học. Ba mốc góc còn nhìn thấy nhưng nhạt màu vẫn có thể được đọc; mốc mất hoàn toàn vẫn tuân theo giới hạn khôi phục một góc. Không ghép mốc cũ từ khung hình trước để tự chấm. Kiểm thử ảnh 480 / 640 px ngang, làm nhòe và làm nhạt ba mốc góc, kiểm tra tọa độ, đáp án tô và các ô trống. Camera có thể chấm khi cạnh ngắn của phiếu đạt 300 px và mốc đủ kích thước; dưới 420 px hoặc dò mốc nhạt cần năm lần đọc nhất quán trong ít nhất 240 ms. Camera điện thoại thực tế vẫn cần kiểm tra theo thiết bị.
+
+## Chia sẻ đáp án bằng QR
+
+Máy tính dùng **Tạo ảnh QR**: tạo toàn bộ bộ đáp án hoặc chỉ mã đề đang chọn, đặt `logo.svg` ở giữa và tải ảnh PNG. QR dùng mức sửa lỗi H; web tự đọc lại ảnh có logo, chỉ cho tải khi dữ liệu đúng. Bộ lớn được chia nhiều QR. Trên mobile, **Nhập ảnh QR** mở lựa chọn chụp camera sau hoặc thư viện ảnh. Nhập QR bổ sung/cập nhật mã đề vào bộ hiện có, để nhập lần lượt đủ các QR; mã đề cùng số nhưng khác số 0 đầu được coi là cùng mã. Thư viện tạo QR, giải mã và logo đều được lưu ngoại tuyến cùng web.

@@ -136,3 +136,10 @@ button,.button{touch-action:manipulation}button:focus-visible,.button:focus-visi
 .paper-viewer-bottom button{font-size:.75rem;padding:.5rem .6rem;white-space:nowrap}
 .paper-viewer-bottom button{background:#edf5ef;color:#174d3e}
 .paper-viewer-bottom .action-label{color:inherit;font-size:inherit}
+
+/* QR answer sharing and the phone image picker. */
+.mobile-only{display:none}.qr-dialog{width:min(540px,calc(100vw - 28px));max-height:calc(100dvh - 32px);overflow:auto;border:1px solid #dce8e0;border-radius:18px;padding:22px;color:#182528;background:white}.qr-dialog::backdrop{background:#102d25aa}.qr-dialog h2{font-size:22px;margin:0 0 16px}.qr-dialog p{font-size:13px;line-height:1.5;color:#597568}.qr-dialog label{display:block;font-size:13px;font-weight:700}.qr-dialog select,#exportQuality{display:block;width:100%;padding:10px;margin:8px 0 14px;border:1px solid #dce8e0;border-radius:8px;background:white;color:#236a56;font:inherit}#answerQrCanvas{display:block;width:100%;height:auto;cursor:default}.qr-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:14px}.qr-dialog .error{color:#bb3434}.qr-dialog button:disabled{opacity:.45;cursor:not-allowed}@media(max-width:600px){.desktop-only{display:none!important}.mobile-only{display:inline-flex}.qr-dialog{padding:18px}.qr-actions .small{min-height:44px}.qr-dialog select{font-size:16px}}
+
+#answerQrCanvas[hidden]{display:none}
+
+#answerQrCanvas{width:min(100%,380px,48dvh);margin:0 auto}

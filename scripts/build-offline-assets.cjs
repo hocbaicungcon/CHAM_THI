@@ -10,5 +10,5 @@ function walk(directory){
   else if(/\.(?:js|mjs|bcmap|pfb|ttf|wasm)$/.test(name))assets.push(name);
  }
 }
-walk('vendor');assets.push('template/PHIEU_CHAM_TN.png','template/PHIEU_TLTN_CHUAN.png');
+walk('vendor');assets.push('template/PHIEU_CHAM_TN.png','template/PHIEU_TLTN_CHUAN.png','logo.svg');
 fs.writeFileSync('offline-assets.json',JSON.stringify([...new Set(assets)].sort()));

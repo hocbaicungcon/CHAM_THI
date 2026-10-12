@@ -3,7 +3,7 @@ const $ = id => document.getElementById(id);
 const G = window.ChamTNGrading, OMR = window.ChamTNOMR, Inputs = window.ChamTNInputs, Reports = window.ChamTNReports;
 const canvas = $('photo'), ctx = canvas.getContext('2d');
 const names = ['I', 'II', 'III'];
-const storedIds = ['key1', 'key2', 'key3', 'n1', 'n2', 'n3', 'w1', 'w2', 'w3', 'mode1', 'mode2', 'mode3', 'rule2', 'level1', 'level2', 'level3', 'level4', 'cameraPreviewSeconds'];
+const storedIds = ['key1', 'key2', 'key3', 'n1', 'n2', 'n3', 'w1', 'w2', 'w3', 'mode1', 'mode2', 'mode3', 'rule2', 'level1', 'level2', 'level3', 'level4', 'cameraPreviewSeconds', 'exportQuality'];
 let records = [], activeId = '', exams = [], preferredCode = '', nextId = 0, loadVersion = 0, importingVersion = 0;
 const cameraGate = new window.ChamTNScanner.ScanGate();
 let cameraPreviewRecord = null, cameraAlignment = null;
@@ -72,7 +72,7 @@ function updateButtons() {
   $('resetCorners').disabled = !r || loading; $('clearBatch').disabled = !records.length && !clearFailed || exporting;
   $('newBatch').disabled = !records.length && !clearFailed || exporting;
   $('export').disabled = !r?.answers || errors.length > 0;
-  for (const id of ['exportExcel', 'exportSummaryPdf', 'exportAnnotatedPdf']) $(id).disabled = !records.length || !!errors.length || loading || exporting;
+  for (const id of ['exportExcel', 'exportSummaryPdf', 'exportAnnotatedPdf', 'exportImage']) $(id).disabled = !records.length || !!errors.length || loading || exporting;
 }
 function updateConfiguration() {
   const cfg = config(), errors = G.validateConfig(cfg);
@@ -133,12 +133,21 @@ async function importKeys(file, type) {
   if (!file) return; const version = ++importingVersion;
   $('importStatus').classList.remove('error'); $('importStatus').textContent = `Đang đọc ${file.name}…`;
   try {
-    const bank = type === 'excel' ? await Inputs.excelFromFile(file) : await Inputs.qrFromFile(file);
+    const bank = type === 'excel' ? await Inputs.excelFromFile(file) : type === 'document' ? await window.ChamTNAnswerDocuments.fromFile(file) : await Inputs.qrFromFile(file);
     if (version !== importingVersion) return;
-    exams = bank; preferredCode = (bank.find(exam => exam.code === '000') || bank[0]).code;
+    if (type === 'qr') {
+      const merged = exams.map(exam => ({ ...exam }));
+      for (const exam of bank) {
+        const code = Inputs.matchingCode(merged, exam.code), index = merged.findIndex(existing => existing.code === code);
+        if (index >= 0) merged[index] = { ...exam, code }; else merged.push(exam);
+      }
+      exams = merged;
+    } else exams = bank;
+    preferredCode = (bank.find(exam => exam.code === '000') || bank[0]).code;
+    preferredCode = Inputs.matchingCode(exams, preferredCode);
     persist('exams', JSON.stringify(exams)); persist('preferredCode', preferredCode); renderExamPicker();
     records.forEach(record => { record.manualKey = false; chooseKey(record); });
-    const active = current(), selected = bank.find(exam => exam.code === (active?.keyCode || preferredCode));
+    const active = current(), selected = exams.find(exam => exam.code === (active?.keyCode || preferredCode));
     if (selected) for (let i = 0; i < 3; i++) { $('n' + (i + 1)).value = selected.keys['p' + (i + 1)].length; save('n' + (i + 1)); }
     showKeys(active?.keyCode || preferredCode); updateConfiguration();
     $('importStatus').textContent = `Đã nhập ${bank.length} mã đề từ ${file.name}. Số câu đã cập nhật theo đáp án mẫu; thang điểm giữ theo cấu hình của bạn.`;
@@ -160,7 +169,52 @@ $('saveManualKey').onclick = () => {
   $('manualKeyStatus').textContent=`Đã lưu mã đề ${code}. Đã cập nhật điểm các bài dùng mã đề này.`;
 };
 $('excelKey').onchange = event => { importKeys(event.target.files[0], 'excel'); event.target.value = ''; };
+$('documentKey').onchange = event => { importKeys(event.target.files[0], 'document'); event.target.value = ''; };
 $('qrKey').onchange = event => { importKeys(event.target.files[0], 'qr'); event.target.value = ''; };
+$('qrCameraKey').onchange = event => { importKeys(event.target.files[0], 'qr'); event.target.value = ''; };
+$('openQrImport').onclick = () => $('qrImportPicker').showModal();
+$('qrImportClose').onclick = () => $('qrImportPicker').close();
+$('qrTakePhoto').onclick = () => { $('qrImportPicker').close(); $('qrCameraKey').click(); };
+$('qrChoosePhoto').onclick = () => { $('qrImportPicker').close(); $('qrKey').click(); };
+let qrBank = [], qrGroups = [], qrIndex = 0, qrVersion = 0;
+function qrSnapshot() {
+  const bank = JSON.parse(JSON.stringify(exams)), draft = keys(), raw = $('manualCode').value.trim();
+  if (Object.values(draft).some(values => values.length)) {
+    if (!/^\d{1,4}$/.test(raw)) throw new Error('Nhập mã đề trước khi tạo QR đáp án.');
+    const code = Inputs.matchingCode(bank, raw) || raw.padStart(3, '0'), exam = Inputs.validateExam({ code, keys: draft });
+    const index = bank.findIndex(existing => existing.code === code); if (index >= 0) bank[index] = exam; else bank.push(exam);
+  }
+  if (!bank.length) throw new Error('Nhập mã đề và đáp án trước khi tạo QR.');
+  return bank;
+}
+async function showAnswerQr() {
+  const version = ++qrVersion, target = $('answerQrCanvas'); target.hidden = true;
+  for (const id of ['qrPrevious', 'qrNext', 'qrDownload']) $(id).disabled = true;
+  $('qrStatus').classList.remove('error'); $('qrStatus').textContent = 'Đang tạo QR và kiểm tra khả năng đọc lại…';
+  try {
+    const selected = Inputs.matchingCode(qrBank, $('manualCode').value.trim() || $('examSelect').value || preferredCode) || qrBank[0].code;
+    qrGroups = window.ChamTNAnswerQR.groups($('qrScope').value === 'selected' ? qrBank.filter(exam => exam.code === selected) : qrBank);
+    qrIndex = Math.min(qrIndex, qrGroups.length - 1);
+    const group = qrGroups[qrIndex], image = await window.ChamTNAnswerQR.render(group.payload);
+    if (version !== qrVersion || !$('answerQrDialog').open) return;
+    target.width = image.width; target.height = image.height; target.getContext('2d').drawImage(image, 0, 0); target.hidden = false;
+    $('qrStatus').textContent = `QR ${qrIndex + 1}/${qrGroups.length} · Mã đề ${group.exams.map(exam => exam.code).join(', ')} · Đã kiểm tra đọc lại đúng đáp án.`;
+    $('qrPrevious').disabled = qrIndex === 0; $('qrNext').disabled = qrIndex === qrGroups.length - 1; $('qrDownload').disabled = false;
+  } catch (error) { if (version === qrVersion) { $('qrStatus').classList.add('error'); $('qrStatus').textContent = error.message; } }
+}
+$('createAnswerQr').onclick = () => {
+  try { qrBank = qrSnapshot(); qrIndex = 0; $('qrScope').value = 'all'; $('answerQrDialog').showModal(); showAnswerQr(); }
+  catch (error) { $('importStatus').classList.add('error'); $('importStatus').textContent = error.message; }
+};
+$('qrScope').onchange = () => { qrIndex = 0; showAnswerQr(); };
+$('qrPrevious').onclick = () => { if (qrIndex > 0) { qrIndex--; showAnswerQr(); } };
+$('qrNext').onclick = () => { if (qrIndex < qrGroups.length - 1) { qrIndex++; showAnswerQr(); } };
+$('qrClose').onclick = () => $('answerQrDialog').close();
+$('answerQrDialog').addEventListener('close', () => { qrVersion++; });
+$('qrDownload').onclick = () => $('answerQrCanvas').toBlob(blob => {
+  if (blob) download(blob, `qr-dap-an-${qrIndex + 1}.png`, 'image/png');
+  else $('qrStatus').textContent = 'Không tạo được ảnh QR để tải.';
+}, 'image/png');
 function renderPicker() {
   $('recordPicker').classList.toggle('hidden', !records.length); $('recordSelect').replaceChildren();
   for (const record of records) { const option = document.createElement('option'); option.value = record.id; option.textContent = record.label; $('recordSelect').appendChild(option); }
@@ -334,11 +388,12 @@ function cameraFrame(source) {
   const flags = [result.flags.p1.slice(0, count(0)).filter((_,i) => !G.ignored('p1',cameraKeys.p1[i])), result.flags.p2.slice(0, count(1)).flatMap((row,i) => row.filter((_,j) => !G.ignored('p2',cameraKeys.p2[i]?.[j]))), result.flags.p3.slice(0, count(2)).filter((_,i) => !G.ignored('p3',cameraKeys.p3[i]))].flat();
   const filled = answers.flat(2).filter(Boolean).length;
   const ambiguous = flags.filter(flag => /không rõ|Không rõ|Dấu tô mờ/.test(flag)).length;
-  const nearEnough = Math.min(...aligned.markers.map((m,i) => Math.hypot(m.x-aligned.markers[(i+1)%4].x,m.y-aligned.markers[(i+1)%4].y))) >= 420;
+  const shortEdge = Math.min(...aligned.markers.map((m,i) => Math.hypot(m.x-aligned.markers[(i+1)%4].x,m.y-aligned.markers[(i+1)%4].y)));
+  const nearEnough = shortEdge >= 300 && aligned.markers.every(marker => marker.size >= 4);
   const usable = nearEnough && !G.validateConfig(cfg).length && cfg.parts.some(p => p.count > 0) &&
     (filled > 0 || !result.metadata.studentUncertain) && ambiguous <= Math.max(2, flags.length * .15);
   const identity = !result.metadata.studentUncertain && !result.metadata.examUncertain ? result.metadata.studentId + ':' + result.metadata.examCode : '';
-  return { points: aligned.points, markers: aligned.markers, auxMarkers: aligned.auxMarkers, nearEnough, profile: aligned.profile, width: source.width, height: source.height, identity, result,
+  return { points: aligned.points, markers: aligned.markers, auxMarkers: aligned.auxMarkers, nearEnough, lowResolution: shortEdge < 420 || !!aligned.faintMarkers, profile: aligned.profile, width: source.width, height: source.height, identity, result,
     signature: JSON.stringify([identity, answers]), usable };
 }
 async function saveCameraSource(source, frame, version) {
@@ -544,12 +599,14 @@ async function exportReport(type) {
   try {
     if (type === 'excel') download(Reports.excel(items, cfg), 'ket-qua-diem-thi.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     else if (type === 'summary') download(await Reports.summaryPdf(items, cfg), 'bang-diem-thi.pdf', 'application/pdf');
-    else download(await Reports.annotatedPdf(items, cfg), 'bai-lam-da-cham.pdf', 'application/pdf');
+    else if (type === 'image') download(await Reports.annotatedJpeg(assess(current()), cfg, $('exportQuality').value), 'bai-lam-da-cham.jpg', 'image/jpeg');
+    else download(await Reports.annotatedPdf(items, cfg, $('exportQuality').value), 'bai-lam-da-cham.pdf', 'application/pdf');
     const unfinished = items.filter(item => !item.result?.scores).length;
-    $('exportStatus').textContent = `Đã xuất ${items.length} bài / trang${unfinished ? `; ${unfinished} bài chưa chấm được ghi rõ trạng thái trong file` : ''}.`;
+    $('exportStatus').textContent = `Đã xuất ${type === 'image' ? 1 : items.length} bài / trang${unfinished ? `; ${unfinished} bài chưa chấm được ghi rõ trạng thái trong file` : ''}.`;
   } catch (error) { $('exportStatus').textContent = 'Không xuất được file: ' + error.message; }
   finally { exporting = false; updateButtons(); }
 }
+$('exportImage').onclick = () => exportReport('image');
 $('exportExcel').onclick = () => exportReport('excel'); $('exportSummaryPdf').onclick = () => exportReport('summary'); $('exportAnnotatedPdf').onclick = () => exportReport('annotated');
 $('export').onclick = () => {
   const r = current(); if (!r?.answers) return;
@@ -569,7 +626,7 @@ async function restoreSession() {
       annotatedView = !!current()?.answers; draw();
     }
     $('sessionStatus').textContent = records.length ? `Đã khôi phục ${records.length} bài trên thiết bị` : 'Lưu tự động trên thiết bị';
-  } catch (_) { $('sessionStatus').textContent = 'Không mở được bộ nhớ cục bộ. Hãy xuất kết quả trước khi đóng trang.'; }
+  } catch (error) { console.warn('Không khôi phục được phiên chấm:', error); $('sessionStatus').textContent = 'Không mở được bộ nhớ cục bộ. Hãy xuất kết quả trước khi đóng trang.'; }
   finally { restoringSession = false; surfaces.forEach(element => { element.inert = false; }); }
 }
 restoreSession();

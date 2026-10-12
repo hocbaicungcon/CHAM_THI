@@ -24,7 +24,8 @@
       }
       if(moved||newIdentity||old.signature!==frame.signature){this.stable=1;this.since=now;this.anchor=frame.points.map(p=>({...p}));}else this.stable++;
       this.pending=''; this.previous=frame; this.lastGood=now;
-      return {ready:this.stable>=3&&now-this.since>=160&&now>=this.cooldown,reason:'stabilizing',progress:Math.min(1,(now-this.since)/160)};
+      const cautious = frame.lowResolution || old?.lowResolution, duration = cautious ? 240 : 160, frames = cautious ? 5 : 3;
+      return {ready:this.stable>=frames&&now-this.since>=duration&&now>=this.cooldown,reason:'stabilizing',progress:Math.min(1,(now-this.since)/duration)};
     }
     accept(frame,now){this.lastSignature=frame.signature;if(frame.identity)this.identities.add(frame.identity);this.cooldown=now+160;this.forgetCandidate();}
   }

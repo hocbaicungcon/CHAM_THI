@@ -141,7 +141,7 @@
     });
     return fallbackWorkerPromise;
   }
-  async function* pdfPages(file) {
+  async function* pdfPages(file, textOnly = false) {
     const lib = await pdfLibrary();
     const bytes = await file.arrayBuffer();
     const options = { cMapUrl: new URL('../vendor/pdfjs/cmaps/', base).href, cMapPacked: true, standardFontDataUrl: new URL('../vendor/pdfjs/standard_fonts/', base).href, wasmUrl: new URL('../vendor/pdfjs/wasm/', base).href, isEvalSupported: false, useWorkerFetch: false };
@@ -163,6 +163,7 @@
       }
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i), natural = page.getViewport({ scale: 1 });
+        if (textOnly) { yield { items: (await page.getTextContent()).items, page: i, total: pdf.numPages }; page.cleanup(); continue; }
         const scale = Math.min(1600 / natural.width, 2200 / natural.height), viewport = page.getViewport({ scale });
         const canvas = document.createElement('canvas'); canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
         await page.render({ canvasContext: canvas.getContext('2d'), viewport, background: 'rgb(255,255,255)' }).promise;
@@ -174,5 +175,5 @@
       throw error;
     } finally { await task?.destroy(); worker?.destroy(); port?.terminate(); }
   }
-  return { validateExam, parseQrPayload, parseRows, workbookExams, matchingCode, makeCanvas, imageFromFile, qrFromFile, excelFromFile, pdfPages };
+  return { validateExam, parseQrPayload, parseRows, workbookExams, matchingCode, makeCanvas, imageFromFile, qrFromFile, excelFromFile, pdfPages, pdfTextPages: file => pdfPages(file, true) };
 });

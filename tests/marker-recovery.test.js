@@ -47,3 +47,29 @@ test('colored grading crosses do not create fills and do not erase underlying gr
   assert.equal(O.choose([133,182,231,280].map(x=>dot(x,644)),['A','B','C','D']).value,graphite?'B':'');
  }
 });
+
+function lowResolution(source,width){
+ const scale=source.width/width,height=Math.round(source.height/scale),data=new Uint8ClampedArray(width*height*4).fill(255);
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+  const sx=Math.round((x+.5)*scale-.5),sy=Math.round((y+.5)*scale-.5),k=(y*width+x)*4;
+  for(let c=0;c<3;c++){let sum=0,n=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=Math.max(0,Math.min(source.width-1,sx+dx)),yy=Math.max(0,Math.min(source.height-1,sy+dy));sum+=source.data[(yy*source.width+xx)*4+c];n++;}data[k+c]=sum/n;}
+ }
+ return {width,height,data};
+}
+test('multiple pale corner squares still align and read at 480/640px with blur',()=>{
+ for(const file of ['PHIEU_CHAM_TN.png','PHIEU_TLTN_CHUAN.png']){
+  const original=read(path.join(__dirname,'../template',file)),baseline=O.autoAlign(original),map=O.project(baseline.points);
+  const position=O.choicePosition('p1',0,0,'B',baseline.profile),mark=map(position.x,position.y);
+  for(let y=Math.round(mark.y-7);y<=mark.y+7;y++)for(let x=Math.round(mark.x-7);x<=mark.x+7;x++)if((x-mark.x)**2+(y-mark.y)**2<=49){const k=(y*original.width+x)*4;original.data[k]=original.data[k+1]=original.data[k+2]=35;}
+  for(const marker of baseline.markers.slice(0,3))for(let y=Math.max(0,Math.floor(marker.y-18));y<Math.min(original.height,marker.y+18);y++)for(let x=Math.max(0,Math.floor(marker.x-18));x<Math.min(original.width,marker.x+18);x++){
+   const k=(y*original.width+x)*4;if(original.data[k]<190)original.data[k]=original.data[k+1]=original.data[k+2]=215;
+  }
+  for(const width of [640,480]){
+   const image=lowResolution(original,width),result=O.autoAlign(image);assert.ok(result,`${file} ${width}`);assert.equal(result.profile,baseline.profile);assert.ok(result.support>=.8);
+   const expected=baseline.points.map(p=>({x:p.x*width/original.width,y:p.y*image.height/original.height}));
+   result.points.forEach((p,i)=>assert.ok(Math.hypot(p.x-expected[i].x,p.y-expected[i].y)<7,`${file} ${width} corner ${i}`));
+   const answer=O.recognize(image,result.points,result.profile);assert.equal(answer.answers.p1[0],'B',`${file} ${width}`);assert.ok(answer.answers.p1.slice(1).every(v=>!v));
+   assert.ok(answer.answers.p2.flat().every(v=>!v));assert.ok(answer.answers.p3.every(v=>!v));
+  }
+ }
+});

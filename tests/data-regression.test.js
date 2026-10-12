@@ -86,3 +86,29 @@ test('local PDF page two reads the seven clearly filled true/false statements an
   assert.deepEqual(result.flags.p2[1],['','','','']);
  }finally{fs.rmSync(folder,{recursive:true,force:true});}
 });
+
+const seventhSource=path.resolve(__dirname,'../data/bai-lam-da-cham 7.pdf');
+test('local seventh PDF recovers the obscured corner and reads strong fills beside erasures',{skip:!fs.existsSync(seventhSource)},t=>{
+ if(spawnSync('pdftoppm',['-v']).error)return t.skip('Poppler unavailable');
+ const folder=fs.mkdtempSync(path.join(os.tmpdir(),'chamtn-seventh-'));
+ try{
+  const prefix=path.join(folder,'sheet');
+  const render=spawnSync('pdftoppm',['-scale-to','1697','-png',seventhSource,prefix]);assert.equal(render.status,0,render.stderr?.toString());
+  for(let page=1;page<=17;page++){
+   const image=readPng(prefix+'-'+String(page).padStart(2,'0')+'.png'),aligned=O.autoAlign(image);
+   assert.ok(aligned,'Page '+page);assert.equal(aligned.profile,'standard');assert.ok(aligned.support>=.8);
+   const result=O.recognize(image,aligned.points,aligned.profile);
+   if(page===1){assert.equal(aligned.recoveredCorner,3);assert.ok(aligned.markers[3].inferred);assert.equal(result.answers.p1[2],'C');}
+   if([3,4,13,14,15].includes(page)){
+    assert.deepEqual(result.answers.p2[0],['Đ','S','S','Đ']);
+    assert.match(result.flags.p2[0][1],/Dấu tô mờ/);
+   }
+   if([3,4,6,10].includes(page)){assert.equal(result.answers.p2[0][0],'Đ');assert.match(result.flags.p2[0][0],/Dấu tô mờ/);}
+   if(page===2||page===3){assert.equal(result.answers.p3[3],'405');assert.match(result.flags.p3[3],/Kiểm tra số/);}
+   if(page===7){assert.equal(result.answers.p3[1],'');assert.ok(result.flags.p3[1]);}
+   if(page===12){assert.equal(result.answers.p1[8],'D');assert.match(result.flags.p1[8],/Dấu tô mờ/);assert.equal(result.answers.p3[0],'7');}
+   if(page!==9)assert.ok(result.answers.p1.slice(12).every(v=>!v),'Unmarked later rows on page '+page);
+   assert.ok(result.answers.p2.slice(2).flat().every(v=>!v));
+  }
+ }finally{fs.rmSync(folder,{recursive:true,force:true});}
+});

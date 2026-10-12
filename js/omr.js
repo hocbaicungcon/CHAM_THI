@@ -64,16 +64,17 @@
       const channel = c => (data[k+c]*(1-fx)+data[k+4+c]*fx)*(1-fy) +
         (data[k+width*4+c]*(1-fx)+data[k+width*4+4+c]*fx)*fy;
       const r = channel(0), g = channel(1), b = channel(2);
-      return { luminance: .2126 * r + .7152 * g + .0722 * b, excludedColor: r > g * 1.5 && r > b * 1.3 && b-g > 35 || r > 140 && g > 80 && b < g * .55 };
+      return { luminance: .2126 * r + .7152 * g + .0722 * b, excludedColor: r > g * 1.5 && r > b * 1.3 && b-g > 35 || r > 140 && g > 80 && b < g * .55, annotationColor: r-g > 70 && r > b*1.6 || g-r > 65 && g > b*1.6 };
     };
     const measure = (x, y) => {
+      measure.lastEvidence = 0; measure.lastOccluded = 0;
       // Estimate paper brightness around each bubble, outside its printed rim.
       // A local threshold follows shadows without counting the shadow as ink.
       const background = [];
       for (let i = 0; i < 24; i++) {
         const angle = i * Math.PI / 12;
         const pixel = sample(x + 16 * Math.cos(angle), y + 16 * Math.sin(angle));
-        if (pixel && !pixel.excludedColor) background.push(pixel.luminance);
+        if (pixel && !pixel.excludedColor && !pixel.annotationColor) background.push(pixel.luminance);
       }
       if (background.length < 12) return 0;
       background.sort((a, b) => a - b);
@@ -82,15 +83,20 @@
       // A dead band suppresses paper texture, sensor noise and light shadows.
       const noise = Math.max(8, paper * .035);
       const fullContrast = Math.max(24, paper * .18);
-      let samples = 0; const contrasts = [];
+      let samples = 0, occluded = 0; const contrasts = [], rawContrasts = [];
       // Include strokes around a white central gap, staying inside the rim.
       for (let dy = -6; dy <= 6; dy += 1) for (let dx = -6; dx <= 6; dx += 1) {
         if (dx * dx + dy * dy > 36) continue;
         const pixel = sample(x + dx, y + dy);
+        // Colored report checks/crosses hide graphite; sample the remaining
+        // pixels instead of treating those strokes as either ink or white.
         if (!pixel) continue;
+        if (pixel.annotationColor && !pixel.excludedColor) { occluded++; continue; }
+        rawContrasts.push(pixel.excludedColor ? 0 : Math.max(0, (paper-pixel.luminance-noise)/Math.max(1,paper)));
         contrasts.push(pixel.excludedColor ? 0 : Math.max(0, Math.min(1, (paper - pixel.luminance - noise) / (fullContrast - noise))));
         samples++;
       }
+      measure.lastOccluded = occluded/113;
       if (samples < 24) return 0;
       // A printed rim or glyph darkens only part of an empty bubble.
       // Combine broad fill with total ink coverage so uneven pencil is kept.
@@ -99,14 +105,24 @@
       const inner = contrasts.slice(0, Math.ceil(contrasts.length*.5));
       const broad = inner.reduce((sum,v)=>sum+v,0)/inner.length;
       const coverage = contrasts.reduce((sum,v)=>sum+v,0)/contrasts.length;
+      rawContrasts.sort((a,b)=>a-b);
+      const rawHalf=Math.ceil(rawContrasts.length*.5);
+      measure.lastEvidence = rawContrasts.slice(0,rawHalf).reduce((sum,v)=>sum+v,0)/rawHalf*.7 + rawContrasts.reduce((sum,v)=>sum+v,0)/samples*.3;
       return broad*.7 + coverage*.3;
     };
     return measure;
   }
 
-  function choose(values, labels, allowFadedAlternative = false) {
+  function choose(values, labels, allowFadedAlternative = false, evidence = []) {
     const ranked = values.map((value, i) => ({ value, i })).sort((a, b) => b.value - a.value), top = ranked[0], next = ranked[1];
     const marked = top.value > .32 && next.value <= .32 && top.value - next.value > .13;
+    if (!marked && allowFadedAlternative && evidence.length===values.length && evidence.every(Number.isFinite)) {
+      const ink=evidence.map((value,i)=>({value,i})).sort((a,b)=>b.value-a.value);
+      // Unlike clipped fill scores, absolute graphite contrast distinguishes a
+      // dark fill from an erased trace. Keep a review flag: intent is uncertain.
+      if(values[ink[0].i]>=.75 && ink[0].value>=.28 && ink[1].value<=.14 && ink[1].value<=ink[0].value*.35)
+        return {value:labels[ink[0].i],flag:'Dấu tô mờ ở ô khác · cần kiểm tra'};
+    }
     if (!marked && allowFadedAlternative && top.value >= .9 && next.value < .58 && top.value-next.value > .4) {
       return { value: labels[top.i], flag: 'Dấu tô mờ ở ô khác · cần kiểm tra' };
     }
@@ -114,17 +130,25 @@
   }
   function read(dot, profile = 'youngmix') {
     const standard = profile === 'standard';
-    if (standard) { const original = dot; dot = (x,y) => original(x * 1229 / 1241,y); }
+    if (standard) { const original = dot; dot = (x,y) => {const score=original(x * 1229 / 1241,y);dot.lastEvidence=original.lastEvidence;dot.lastOccluded=original.lastOccluded;return score;}; }
+    const chooseDots=(positions,labels,allowFaded=false)=>{
+      const evidence=[],occluded=[];
+      const values=positions.map(([x,y])=>{const score=dot(x,y);evidence.push(dot.lastEvidence);occluded.push(dot.lastOccluded);return score;});
+      const result=choose(values,labels,allowFaded,evidence),index=labels.indexOf(result.value);
+      if(result.value && !result.flag && occluded[index]>.25 && evidence[index]<.12)
+        result.flag='Nét tô bị màu đánh dấu che · cần kiểm tra';
+      return result;
+    };
     const answers = { p1: [], p2: [], p3: [] }, flags = { p1: [], p2: [], p3: [] }, bases = standard ? [173,428.5,684,939.5] : [133,411,689,967];
     for (let q = 0; q < template.limits[0]; q++) {
       const x = bases[Math.floor(q / 10)], y = standard ? 670 + 26.4 * (q % 10) : 644 + 29.5 * (q % 10);
-      const result = choose([0, 1, 2, 3].map(j => dot(x + (standard ? 51.1 : 49) * j, y)), ['A', 'B', 'C', 'D'], true);
+      const result = chooseDots([0, 1, 2, 3].map(j => [x + (standard ? 51.1 : 49) * j, y]), ['A', 'B', 'C', 'D'], true);
       answers.p1.push(result.value); flags.p1.push(result.flag);
     }
     for (let q = 0; q < template.limits[1]; q++) {
       const x = bases[Math.floor(q / 2)] + (q % 2) * (standard ? 102.2 : 98), row = [], rowFlags = [];
       for (let j = 0; j < 4; j++) {
-        const y = standard ? 1051 + 26.4 * j : 1060 + 30 * j, result = choose([dot(x, y), dot(x + (standard ? 51.1 : 49), y)], ['Đ', 'S']);
+        const y = standard ? 1051 + 26.4 * j : 1060 + 30 * j, result = chooseDots([[x,y],[x + (standard ? 51.1 : 49),y]], ['Đ', 'S'],true);
         row.push(result.value); rowFlags.push(result.flag);
       }
       answers.p2.push(row); flags.p2.push(rowFlags);
@@ -133,7 +157,7 @@
       const x = standard ? 165 + q * 163.8 : 126 + q * 177.5, digits = [], columnFlags = [];
       const spacing = standard ? 34.4 : 30;
       for (let col = 0; col < 4; col++) {
-        const result = choose(Array.from({ length: 10 }, (_, d) => dot(x + spacing * col, standard ? 1340 + 27.15 * d : 1348 + 33 * d)), '0123456789'.split(''));
+        const result = chooseDots(Array.from({ length: 10 }, (_, d) => [x + spacing * col, standard ? 1340 + 27.15 * d : 1348 + 33 * d]), '0123456789'.split(''),true);
         digits.push(result.value); columnFlags.push(result.flag);
       }
       const negative = dot(x, standard ? 1286 : 1283) > .32;
@@ -151,7 +175,7 @@
       let value = trimmed.replace(/\s/g, '');
       if (negative && value) value = '-' + value;
       const validNumber = /^-?(?:\d+(?:,\d+)?|,\d+)$/.test(value);
-      const uncertain = columnFlags.some(flag => flag === 'Không rõ hoặc tô nhiều') || gap || !validNumber || commaResult.flag === 'Không rõ hoặc tô nhiều';
+      const uncertain = columnFlags.some(flag => flag === 'Không rõ hoặc tô nhiều' || /cần kiểm tra/.test(flag)) || gap || !validNumber || commaResult.flag === 'Không rõ hoặc tô nhiều';
       answers.p3.push(value); flags.p3.push(uncertain ? 'Kiểm tra số: có ô không rõ, khoảng trống hoặc dấu phẩy không rõ' : '');
     }
     const digits = (x, columns) => Array.from({ length: columns }, (_, col) => choose(Array.from({ length: 10 }, (_, d) => dot(x + 24 * col, standard ? 195 + 33.9 * d : 200 + 34.5 * d)), '0123456789'.split('')));
@@ -248,11 +272,13 @@
       if(area<width*height*.12)return null;
       try {
         const map=project(quad,layout.anchors), limit=Math.max(3,Math.min(...sizes)*.65);
-        const matches=layout.timing.map(([x,y])=>{
+        const used=new Set(), matches=layout.timing.map(([x,y])=>{
           const p=map(x,y);let nearest=null,distance=limit;
+          if(!Number.isFinite(p.x)||!Number.isFinite(p.y)||p.x < -limit||p.y < -limit||p.x > width+limit||p.y > height+limit)return null;
           for(let cy=Math.floor((p.y-limit)/cellSize);cy<=Math.floor((p.y+limit)/cellSize);cy++)
             for(let cx=Math.floor((p.x-limit)/cellSize);cx<=Math.floor((p.x+limit)/cellSize);cx++)
-              for(const m of cells.get(cx+','+cy)||[]){const d=Math.hypot(m.x-p.x,m.y-p.y);if(d<distance){distance=d;nearest=m;}}
+              for(const m of cells.get(cx+','+cy)||[]){const d=Math.hypot(m.x-p.x,m.y-p.y);if(d<distance&&!used.has(m)){distance=d;nearest=m;}}
+          if(nearest)used.add(nearest);
           return nearest?{x,y,marker:nearest}:null;
         }).filter(Boolean);
         const support=matches.length/layout.timing.length;
@@ -260,6 +286,34 @@
         const score=support+area/(width*height)*.08+quad.reduce((sum,p)=>sum+p.fill,0)*.025-(ratio-1)*.12;
         return {score,support,profile:layout.profile,markers:quad.map(p=>({x:p.x,y:p.y,size:p.size})),points:[[0,0],[1229,0],[1229,1754],[0,1754]].map(([x,y])=>map(x,y)),rotation,anchors:layout.anchors,auxMarkers:matches.map(m=>m.marker),adjustments:matches.map(m=>({x:m.x,y:m.y,dx:m.marker.x-map(m.x,m.y).x,dy:m.marker.y-map(m.x,m.y).y}))};
       } catch(_){return null;}
+    };
+    const recover=(quad,mi,layout,rotation)=>{
+      const size=quad[mi].size;let best=null;
+      let guess;try{guess=project(quad,layout.anchors);}catch(_){return null;}
+      const corner=layout.anchors[mi];
+      const seeds=layout.timing.slice().sort((a,b)=>Math.hypot(a[0]-corner[0],a[1]-corner[1])-Math.hypot(b[0]-corner[0],b[1]-corner[1])).slice(0,4);
+      for(const seed of seeds){
+        const predicted=guess(...seed),radius=Math.hypot(width,height)*.045;
+        const near=landmarks.filter(m=>!quad.includes(m)&&Math.hypot(m.x-predicted.x,m.y-predicted.y)<radius&&m.size>size*.3&&m.size<size*1.4)
+          .sort((a,b)=>Math.hypot(a.x-predicted.x,a.y-predicted.y)-Math.hypot(b.x-predicted.x,b.y-predicted.y)).slice(0,4);
+        for(const mark of near){
+          try{
+            const seedPoints=quad.slice(),seedAnchors=layout.anchors.slice();seedPoints[mi]=mark;seedAnchors[mi]=seed;
+            const fitted=project(seedPoints,seedAnchors),inferred=fitted(...corner);
+            if(inferred.x<0||inferred.y<0||inferred.x>=width||inferred.y>=height)continue;
+            const proposal=quad.slice();proposal[mi]={...quad[mi],...inferred};
+            const result=evaluate(proposal,layout,rotation);
+            if(!result||result.support<.8||result.auxMarkers.length<12)continue;
+            // Sparse or clustered coincidences cannot authorize recovery.
+            const xs=result.adjustments.map(m=>m.x),ys=result.adjustments.map(m=>m.y);
+            if(Math.max(...xs)-Math.min(...xs)<template.width*.5||Math.max(...ys)-Math.min(...ys)<template.height*.55)continue;
+            result.recoveredCorner=mi;result.markers[mi].inferred=true;
+            if(!best||result.score>best.score)best=result;
+            if(result.support===1 && result.adjustments.every(m=>Math.hypot(m.dx,m.dy)<2.5))return result;
+          }catch(_){/* A bad hypothesis falls back to the next observed mark. */}
+        }
+      }
+      return best;
     };
     // Validate current components near the previous corners, never reuse stale corners.
     if(previous?.markers?.length===4){
@@ -272,15 +326,41 @@
       if(layout&&nearby.every(Boolean)&&new Set(nearby).size===4){
         const result=evaluate(nearby,layout,previous.rotation);
         if(result?.support>=.7){result.tracked=true;return finish(result);}
+      } else if(layout && nearby.filter(Boolean).length===3 && new Set(nearby.filter(Boolean)).size===3){
+        const missing=nearby.findIndex(p=>!p),next=nearby[(missing+1)%4],opposite=nearby[(missing+2)%4],last=nearby[(missing+3)%4];
+        nearby[missing]={x:next.x+last.x-opposite.x,y:next.y+last.y-opposite.y,size:(next.size+opposite.size+last.size)/3,fill:(next.fill+opposite.fill+last.fill)/3};
+        const result=recover(nearby,missing,layout,previous.rotation);
+        if(result){result.tracked=true;return finish(result);}
       }
     }
-    if(groups.some(group=>!group.length))return null;
     let best=null;
-    for(const a of groups[0])for(const b of groups[1])for(const c of groups[2])for(const d of groups[3]){
-      const quad=[a,b,c,d];
-      for(let rotation=0;rotation<4;rotation++)for(const layout of layouts){
-        const result=evaluate(quad.map((_,i)=>quad[(i+rotation)%4]),layout,rotation);
-        if(result&&(!best||result.score>best.score))best=result;
+    if(groups.every(group=>group.length))
+      for(const a of groups[0])for(const b of groups[1])for(const c of groups[2])for(const d of groups[3]){
+        const quad=[a,b,c,d];
+        for(let rotation=0;rotation<4;rotation++)for(const layout of layouts){
+          const result=evaluate(quad.map((_,i)=>quad[(i+rotation)%4]),layout,rotation);
+          if(result&&(!best||result.score>best.score))best=result;
+        }
+      }
+    if(best?.support>=.96)return finish(best);
+    // A missing corner is reconstructed from THREE current squares and a
+    // current auxiliary mark. An affine estimate only proposes correspondences;
+    // a projective fit must then agree with the wider printed marker pattern.
+    for(let missing=0;missing<4;missing++){
+      const other=[0,1,2,3].filter(i=>i!==missing);
+      if(other.some(i=>!groups[i].length))continue;
+      for(const a of groups[other[0]].slice().sort((a,b)=>b.size-a.size).slice(0,4))for(const b of groups[other[1]].slice().sort((a,b)=>b.size-a.size).slice(0,4))for(const c of groups[other[2]].slice().sort((a,b)=>b.size-a.size).slice(0,4)){
+        const physical=[];[a,b,c].forEach((p,i)=>physical[other[i]]=p);
+        const next=physical[(missing+1)%4],opposite=physical[(missing+2)%4],last=physical[(missing+3)%4];
+        const size=(a.size+b.size+c.size)/3;
+        if(Math.max(a.size,b.size,c.size)/Math.min(a.size,b.size,c.size)>2)continue;
+        physical[missing]={x:next.x+last.x-opposite.x,y:next.y+last.y-opposite.y,size,fill:(a.fill+b.fill+c.fill)/3};
+        for(let rotation=0;rotation<4;rotation++)for(const layout of layouts){
+          const quad=physical.map((_,i)=>physical[(i+rotation)%4]),mi=(missing-rotation+4)%4;
+          const result=recover(quad,mi,layout,rotation);
+          if(result&&(!best||result.score>best.score))best=result;
+          if(result?.support===1 && result.adjustments.every(m=>Math.hypot(m.dx,m.dy)<2.5))return finish(result);
+        }
       }
     }
     return finish(best);

@@ -36,6 +36,8 @@
     return exams;
   }
   function parseRows(rows) {
+    const smartHeader = rows.findIndex(row => /^câu\s*[\\/]\s*mã\s*đề$/i.test(String(row[0] ?? '').trim()));
+    if (smartHeader >= 0) return parseSmartRows(rows, smartHeader);
     const headerIndex = rows.findIndex(row => row.some(v => /^1a$/i.test(String(v).trim())) && row.some(v => String(v).trim() === '1'));
     if (headerIndex < 0) return [];
     const headers = rows[headerIndex].map(v => String(v).trim());
@@ -57,10 +59,35 @@
     }
     return exams;
   }
+  function parseSmartRows(rows, headerIndex) {
+    const codes = trimTail(rows[headerIndex].slice(1)).map(value => String(value ?? '').trim());
+    if (!codes.length || codes.some(code => !/^\d{1,4}$/.test(code))) throw new Error('SmartTest: hàng đầu cần mã đề hợp lệ ở từng cột.');
+    const exams = codes.map(code => ({ code: code.padStart(3, '0'), keys: { p1: [], p2: [], p3: [] } }));
+    let section = 1, previous = 0;
+    for (const row of rows.slice(headerIndex + 1)) {
+      if (row.every(value => !String(value ?? '').trim())) continue;
+      const question = Number(row[0]);
+      if (!Number.isInteger(question) || question !== previous + 1) throw new Error('SmartTest: số câu cần liên tiếp, bắt đầu từ 1.');
+      previous = question;
+      const values = codes.map((_, i) => String(row[i + 1] ?? '').trim().toUpperCase());
+      const kinds = values.filter(value => !['O', 'X'].includes(value)).map(value => {
+        if (/^[ĐDSOX]{4}$/.test(value)) return 2;
+        if (/^[ABCD]{1,4}$/.test(value)) return 1;
+        if (/^-?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(value)) return 3;
+        return 0;
+      });
+      const kind = kinds[0] || section;
+      if (!kind || kinds.some(value => value !== kind) || kind < section) throw new Error(`SmartTest: câu ${question} có đáp án không hợp lệ hoặc không cùng phần.`);
+      section = kind;
+      if (row.slice(codes.length + 1).some(value => String(value ?? '').trim())) throw new Error(`SmartTest: câu ${question} có cột đáp án không có mã đề.`);
+      values.forEach((value, i) => exams[i].keys['p' + section].push(section === 2 ? (['O', 'X'].includes(value) ? value.repeat(4) : value.replace(/D/g, 'Đ')).split('') : value));
+    }
+    return exams.map(validateExam);
+  }
   function workbookExams(workbook, xlsx) {
     const exams = [];
     for (const sheet of workbook.SheetNames) exams.push(...parseRows(xlsx.utils.sheet_to_json(workbook.Sheets[sheet], { header: 1, raw: false, defval: '' })));
-    if (!exams.length) throw new Error('Không tìm thấy bảng đáp án theo mẫu: mã đề ở cột A, phần I / các ý 1a… / phần III ở hàng đầu.');
+    if (!exams.length) throw new Error('Không tìm thấy bảng đáp án theo mẫu Excel YoungMix hoặc SmartTest.');
     const codes = new Set(); for (const exam of exams) { if (codes.has(exam.code)) throw new Error(`Mã đề ${exam.code} bị trùng trong file Excel.`); codes.add(exam.code); }
     return exams;
   }

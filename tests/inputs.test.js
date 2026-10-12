@@ -30,7 +30,7 @@ function rotate90(source) {
   return { width, height, data };
 }
 test('actual YoungMix workbook imports 25 codes and trims only trailing unused questions', () => {
-  const workbook = XLSX.read(fs.readFileSync(path.join(__dirname, '../template/TLTN-BGD-2025-YoungMix.xlsx')), { type: 'buffer' });
+  const workbook = XLSX.read(fs.readFileSync(path.join(__dirname, '../template/BGD-2025-YoungMix.xlsx')), { type: 'buffer' });
   const exams = Inputs.workbookExams(workbook, XLSX);
   assert.equal(exams.length, 25); assert.equal(exams[0].code, '000');
   assert.deepEqual(exams[0].keys.p1.slice(0, 4), ['B', 'C', 'A', 'D']);
@@ -268,4 +268,24 @@ test('camera tracking validates current registration and auxiliary marks after s
  assert.equal(OMR.recognize(shifted,current.points,current.profile).answers.p1[0],'B');
  const blank={...shifted,data:new Uint8ClampedArray(source.data.length).fill(255)};
  assert.equal(OMR.autoAlign(blank,current),null,'A previous alignment must not create markers on an empty frame');
+});
+
+test('actual SmartTest workbook imports column codes and all three sections', () => {
+  const workbook = XLSX.read(fs.readFileSync(path.join(__dirname, '../template/BGD-2025-SmartTest.xlsx')), { type: 'buffer' });
+  const exams = Inputs.workbookExams(workbook, XLSX);
+  assert.deepEqual(exams.map(exam => exam.code), ['192', '296', '387', '497']);
+  for (const exam of exams) assert.deepEqual(Object.values(exam.keys).map(values => values.length), [12, 5, 4]);
+  assert.equal(exams[0].keys.p1.join(''), 'CDDBAADBAACD');
+  assert.deepEqual(exams[0].keys.p2.map(row => row.join('')), ['ĐĐĐĐ', 'ĐĐSĐ', 'ĐSSĐ', 'SĐĐĐ', 'SĐSĐ']);
+  assert.deepEqual(exams[0].keys.p3, ['54,6', '0,73', '0,6', '-1']);
+  assert.deepEqual(exams[3].keys.p3, ['-1', '0,6', '54,6', '0,73']);
+  assert.equal(Inputs.matchingCode(exams, '0192'), '192');
+});
+test('SmartTest rejects missing values, mixed sections and interrupted numbering', () => {
+  const header = ['Câu\\Mã đề', '001', '002'];
+  for (const rows of [ [[1, 'A', '']], [[1, 'A', '2']], [[2, 'A', 'B']], [[1, 'ĐĐSS', 'SĐĐS'], [2, 'A', 'B']] ]) {
+    assert.throws(() => Inputs.parseRows([header, ...rows]));
+  }
+  const exams = Inputs.parseRows([header, [1, 'AB', 'O'], [2, 'ĐSOX', 'XXXX'], [3, 'O', 'X'], [4, '-1,5', 'X']]);
+  assert.deepEqual(exams[0].keys, {p1:['AB'], p2:[['Đ','S','O','X'], ['O','O','O','O']], p3:['-1,5']});
 });

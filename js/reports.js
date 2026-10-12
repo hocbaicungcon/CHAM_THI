@@ -138,7 +138,9 @@
             for (let col = 0; col < 4; col++) {
               const px = sx(base + spacing * col);
               const ys = Array.from({length:10}, (_,d) => standard ? 1340 + 27.15*d : 1348 + 33*d);
-              const selected = O.choose(ys.map(y => numericDot(px,y)), '0123456789'.split(''));
+              const evidence = [];
+              const values = ys.map(y => { const value = numericDot(px,y); evidence.push(numericDot.lastEvidence); return value; });
+              const selected = O.choose(values, '0123456789'.split(''), true, evidence);
               if (selected.value) mark(sheetCtx, {x:px,y:ys[Number(selected.value)]}, correct);
             }
             const negativeY = standard ? 1286 : 1283, commaY = standard ? 1313 : 1317;

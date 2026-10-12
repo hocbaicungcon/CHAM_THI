@@ -383,10 +383,12 @@ function drawCameraOverlay(frame) {
   context.beginPath(); frame.points.forEach((p,i) => { const q = point(p); if (!i) context.moveTo(q.x,q.y); else context.lineTo(q.x,q.y); }); context.closePath(); context.stroke();
   for (const [i, marker] of [...frame.markers,...(frame.auxMarkers || [])].entries()) {
     const primary = i<4, p = point(marker), size = Math.max(primary?16:8, marker.size * scale * (primary?1.6:1.1));
-    if(primary) context.fillRect(p.x-size/2,p.y-size/2,size,size); context.strokeRect(p.x-size/2,p.y-size/2,size,size);
+    context.save();
+    if (marker.inferred) { context.strokeStyle='#ffcd6e'; context.setLineDash([6,4]); }
+    if(primary && !marker.inferred) context.fillRect(p.x-size/2,p.y-size/2,size,size); context.strokeRect(p.x-size/2,p.y-size/2,size,size);
     context.fillStyle = '#fff'; context.beginPath(); context.arc(p.x,p.y,Math.max(2,overlay.width/200),0,Math.PI*2); context.fill();
     context.font = `bold ${Math.max(12,overlay.width/35)}px system-ui`; if(primary) context.fillText(String(i+1),p.x+size/2+3,p.y);
-    context.fillStyle = '#83f5a533';
+    context.restore(); context.fillStyle = '#83f5a533';
   }
 }
 async function scanCamera(version) {

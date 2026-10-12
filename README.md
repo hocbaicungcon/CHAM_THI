@@ -30,9 +30,11 @@ Bài chưa có đủ mốc hoặc chưa có đáp án đúng mã đề vẫn đ�
 
 ## Nhập đáp án theo mẫu
 
-### Excel YoungMix
+### Excel YoungMix / SmartTest
 
-`template/TLTN-BGD-2025-YoungMix.xlsx` có mã đề ở cột A; một hàng cho mỗi mã đề. Hàng tiêu đề có phần I `1…40`, phần II `1a…8d`, phần III `1…6`. Web bỏ các câu trống ở cuối từng phần, giữ nguyên vị trí câu bên trong.
+`template/BGD-2025-YoungMix.xlsx` có mã đề ở cột A; một hàng cho mỗi mã đề. Hàng tiêu đề có phần I `1…40`, phần II `1a…8d`, phần III `1…6`. Web bỏ các câu trống ở cuối từng phần, giữ nguyên vị trí câu bên trong.
+
+`template/BGD-2025-SmartTest.xlsx` đặt mã đề theo cột, hàng đầu là `Câu\Mã đề`. Các hàng câu liên tiếp gồm phần I (A/B/C/D), phần II (bốn ý Đ/S/O/X viết liền), rồi phần III (đáp án số). Web tự nhận cấu trúc, giữ dấu phẩy thập phân và mã đề có số 0 đầu. File mẫu có 4 mã đề, mỗi mã gồm 12 câu phần I, 5 câu phần II và 4 câu phần III.
 
 File mẫu chứa 25 mã đề, mỗi đề có 18 câu phần I, 4 câu phần II và 6 câu phần III. Chữ `D` ở phần II được đổi thành `Đ`. Chấp nhận `.xlsx` và `.xls` có cấu trúc này.
 
@@ -143,3 +145,19 @@ trung vị 66 ms. Đây chưa phải phép đo camera trên điện thoại; m�
 
 Đo lại bằng `node scripts/benchmark-omr.cjs /path/to/page.png` (có thể truyền nhiều
 ảnh PNG RGB/RGBA). Thời gian này chưa gồm giải mã PDF, vẽ preview và lưu ảnh.
+
+### Một chấm góc bị lóa và nét tô có vệt tẩy
+
+Khi một chấm góc không còn đọc được, thuật toán thử khôi phục bằng ba chấm góc
+hiện có và một chấm phụ, rồi kiểm chứng với ít nhất 12 chấm phụ phân bố trên
+phiếu (tối thiểu 80% mẫu chấm phụ phải khớp). Camera bám phiếu cũng kiểm chứng
+lại các chấm trong từng khung hình. Chấm góc được khôi phục hiện viền vàng nét
+đứt; các chấm quan sát được giữ viền thường.
+
+So sánh thêm độ tương phản chì chưa bị giới hạn ở mức tối đa để phân biệt nét
+tô đậm với vệt tẩy nhạt. Các kết quả chọn nét đậm cạnh vệt nhạt vẫn có cảnh báo
+kiểm tra; hai nét tô rõ không được tự chọn. Áp dụng cho phần I, đúng/sai và cột
+chữ số; vòng đánh dấu chữ số trên bài chấm dùng cùng quy tắc. Khi nhập lại bài
+đã chấm, các nét xanh/đỏ của vòng đánh dấu được loại khỏi vùng đo, đọc các pixel
+chì còn lại. Quy tắc này hướng tới bài dùng chì/mực tối, không phải phiếu tô
+bằng các màu đánh dấu của ứng dụng.

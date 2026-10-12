@@ -134,3 +134,5 @@ button,.button{touch-action:manipulation}button:focus-visible,.button:focus-visi
 .paper-viewer-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px calc(env(safe-area-inset-bottom) + 8px);flex:0 0 auto}
 .paper-viewer-bottom span{font-size:.7rem;text-align:center;color:#c9ded6}
 .paper-viewer-bottom button{font-size:.75rem;padding:.5rem .6rem;white-space:nowrap}
+.paper-viewer-bottom button{background:#edf5ef;color:#174d3e}
+.paper-viewer-bottom .action-label{color:inherit;font-size:inherit}

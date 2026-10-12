@@ -120,7 +120,7 @@ Có ô mã đề (1–4 chữ số) và nút “Lưu mã đề & đáp án” đ
 
 Lần mở đầu cần mạng để tải bộ nhớ đệm. Khi xuất hiện “Sẵn sàng dùng khi mất mạng”, trang có thể mở lại, chấm ảnh/PDF và xuất kết quả ngoại tuyến. Dữ liệu lưu trên cùng trình duyệt và thiết bị; xóa dữ liệu website hoặc dùng chế độ riêng tư có thể làm mất bản lưu. Nếu bộ nhớ đầy/không khả dụng, ứng dụng hiển thị lỗi lưu và vẫn cho xuất kết quả.
 
-Khi cập nhật tài nguyên web, cập nhật danh sách `offline-assets.json` và tăng phiên bản cache trong `sw.js`. Không đưa bài học sinh vào danh sách cache hay Git. Cache mới kích hoạt sau khi tải đủ tài nguyên; tải lại trang để nhận phiên bản mới. Dữ liệu IndexedDB không bị xóa khi cập nhật cache.
+Khi cập nhật tài nguyên web, chạy `node scripts/build-offline-assets.cjs` để tạo lại `offline-assets.json` và tăng phiên bản cache trong `sw.js`. Không đưa bài học sinh vào danh sách cache hay Git. Cache mới kích hoạt sau khi tải đủ tài nguyên; tải lại trang để nhận phiên bản mới. Dữ liệu IndexedDB không bị xóa khi cập nhật cache.
 
 ### Xem bài toàn màn hình
 
